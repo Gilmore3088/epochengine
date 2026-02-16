@@ -1,0 +1,32 @@
+# Godot 4
+.godot/
+*.import
+export_presets.cfg
+
+# Godot-specific ignores
+.uid_cache
+*.translation
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build
+build/
+export/
+
+# Original doc bundles (consolidated into docs/)
+Civilization_Evolution_Engine_DocBundle/
+Epoch_Engine_Robust_DocBundle/
+EpochEngine_Initial_Doc_Package/
+
+# Plans (local working documents)
+plans/
