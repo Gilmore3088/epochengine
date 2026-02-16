@@ -105,6 +105,7 @@ static func style_button(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", PARCHMENT_DIM)
 	btn.add_theme_color_override("font_hover_color", PARCHMENT)
 	btn.add_theme_color_override("font_pressed_color", GOLD)
+	btn.focus_mode = Control.FOCUS_NONE  # Prevent buttons from stealing keyboard shortcuts
 
 
 static func style_label_header(lbl: Label, size: int = 18) -> void:

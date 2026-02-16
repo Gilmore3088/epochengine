@@ -177,9 +177,9 @@ func test_expansion_cost_below_threshold() -> void:
 
 func test_expansion_cost_above_threshold() -> void:
 	var civ := _make_civ()
-	# 28 regions, threshold is 25 -> 3 excess * 5 = 15 extra
-	var cost := EconomySimulation.calculate_expansion_cost(civ, 28)
-	assert_eq(cost, 30, "Cost should escalate above threshold")
+	# 8 regions, base admin capacity is 5 -> 3 excess * 5 = 15 extra + 15 base = 30
+	var cost := EconomySimulation.calculate_expansion_cost(civ, 8)
+	assert_eq(cost, 30, "Cost should escalate above admin capacity base")
 
 
 func test_can_afford_expansion_true() -> void:

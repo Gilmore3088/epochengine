@@ -14,6 +14,8 @@ var advance_button: Button
 var speed_5x_button: Button
 var speed_10x_button: Button
 var speed_label: Label
+var zoom_in_btn: Button
+var zoom_out_btn: Button
 
 # --- Overlay buttons ---
 var overlay_buttons: Dictionary = {}
@@ -29,10 +31,12 @@ var summary_content: RichTextLabel
 var summary_continue_btn: Button
 
 # --- State ---
-var player_civ_id: int = 0
+var player_civ_id: int:
+	get: return GameState.player_civ_id
 var fast_forward_count: int = 0
 var fast_forward_target: int = 0
 var is_fast_forwarding: bool = false
+var ff_should_pause: bool = false
 
 # Pre-fast-forward state snapshot
 var ff_pre_state: Dictionary = {}
@@ -163,6 +167,32 @@ func _build_top_bar() -> void:
 	UITheme.style_label_body(speed_label, 13, UITheme.PARCHMENT_DIM)
 	time_group.add_child(speed_label)
 
+	_add_separator(top_bar)
+
+	# --- Zoom group ---
+	var zoom_group := HBoxContainer.new()
+	zoom_group.add_theme_constant_override("separation", 4)
+	top_bar.add_child(zoom_group)
+
+	zoom_out_btn = Button.new()
+	zoom_out_btn.text = "-"
+	zoom_out_btn.custom_minimum_size = Vector2(30, 0)
+	zoom_out_btn.pressed.connect(func() -> void: _zoom_camera(-0.1))
+	UITheme.style_button(zoom_out_btn)
+	zoom_group.add_child(zoom_out_btn)
+
+	var zoom_label := Label.new()
+	zoom_label.text = "Zoom"
+	UITheme.style_label_body(zoom_label, 13, UITheme.PARCHMENT_DIM)
+	zoom_group.add_child(zoom_label)
+
+	zoom_in_btn = Button.new()
+	zoom_in_btn.text = "+"
+	zoom_in_btn.custom_minimum_size = Vector2(30, 0)
+	zoom_in_btn.pressed.connect(func() -> void: _zoom_camera(0.1))
+	UITheme.style_button(zoom_in_btn)
+	zoom_group.add_child(zoom_in_btn)
+
 
 func _add_separator(parent: Control) -> void:
 	var sep := VSeparator.new()
@@ -263,25 +293,28 @@ func _build_event_log() -> void:
 # ==================== SUMMARY MODAL ====================
 
 func _build_summary_modal() -> void:
+	# Fullscreen container so anchors resolve correctly
 	summary_bg = ColorRect.new()
-	summary_bg.anchors_preset = Control.PRESET_FULL_RECT
+	summary_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	summary_bg.color = Color(0, 0, 0, 0.60)
 	summary_bg.visible = false
 	summary_bg.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(summary_bg)
 
+	# Center container to hold the panel
+	var center := CenterContainer.new()
+	center.set_anchors_preset(Control.PRESET_FULL_RECT)
+	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	summary_bg.add_child(center)
+
 	summary_panel = PanelContainer.new()
-	summary_panel.anchors_preset = Control.PRESET_CENTER
-	summary_panel.offset_left = -220
-	summary_panel.offset_right = 220
-	summary_panel.offset_top = -240
-	summary_panel.offset_bottom = 240
-	summary_panel.visible = false
+	summary_panel.custom_minimum_size = Vector2(440, 0)
 	summary_panel.add_theme_stylebox_override("panel", UITheme.make_panel_style(
 		Color(0.08, 0.07, 0.10, 0.96),
 		UITheme.PANEL_BORDER,
 		8, 1, 22
 	))
+	center.add_child(summary_panel)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 10)
@@ -316,8 +349,6 @@ func _build_summary_modal() -> void:
 	UITheme.style_button(summary_continue_btn)
 	summary_continue_btn.add_theme_font_size_override("font_size", 15)
 	vbox.add_child(summary_continue_btn)
-
-	add_child(summary_panel)
 
 
 func _capture_pre_state() -> void:
@@ -401,7 +432,6 @@ func _show_summary() -> void:
 	summary_content.clear()
 	summary_content.append_text("\n".join(lines))
 	summary_bg.visible = true
-	summary_panel.visible = true
 
 
 func _fmt_delta(label_text: String, before: String, after: String, delta: Variant) -> String:
@@ -423,7 +453,6 @@ func _fmt_pop(n: int) -> String:
 
 func _dismiss_summary() -> void:
 	summary_bg.visible = false
-	summary_panel.visible = false
 
 
 # ==================== SIGNALS ====================
@@ -475,10 +504,24 @@ func _update_stability_color(value: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("advance_year"):
 		_on_advance_pressed()
+	elif event.is_action_pressed("speed_normal"):
+		_on_advance_pressed()
+	elif event.is_action_pressed("speed_fast"):
+		_start_fast_forward(5)
+	elif event.is_action_pressed("speed_fastest"):
+		_start_fast_forward(10)
 	if event is InputEventKey and event.pressed and summary_bg.visible:
 		if event.keycode == KEY_ESCAPE or event.keycode == KEY_ENTER:
 			_dismiss_summary()
 			get_viewport().set_input_as_handled()
+
+
+func _zoom_camera(amount: float) -> void:
+	var camera := get_viewport().get_camera_2d()
+	if camera:
+		camera.target_zoom = clampf(camera.target_zoom + amount, 0.2, 4.0)
+		camera.zoom = Vector2(camera.target_zoom, camera.target_zoom)
+		EventBus.zoom_changed.emit(camera.target_zoom)
 
 
 func _on_advance_pressed() -> void:
@@ -494,6 +537,7 @@ func _start_fast_forward(years: int) -> void:
 		return
 	_capture_pre_state()
 	is_fast_forwarding = true
+	ff_should_pause = false
 	fast_forward_target = years
 	fast_forward_count = 0
 	speed_label.text = "Running %d years..." % years
@@ -502,20 +546,27 @@ func _start_fast_forward(years: int) -> void:
 
 func _fast_forward_step() -> void:
 	if fast_forward_count >= fast_forward_target:
-		speed_label.text = ""
-		is_fast_forwarding = false
-		_show_summary()
+		_end_fast_forward()
 		return
 
 	TurnManager.advance_year()
 	fast_forward_count += 1
 
+	if ff_should_pause:
+		_end_fast_forward()
+		return
+
 	if fast_forward_count < fast_forward_target:
 		call_deferred("_fast_forward_step")
 	else:
-		speed_label.text = ""
-		is_fast_forwarding = false
-		_show_summary()
+		_end_fast_forward()
+
+
+func _end_fast_forward() -> void:
+	speed_label.text = ""
+	is_fast_forwarding = false
+	ff_should_pause = false
+	_show_summary()
 
 
 # ==================== EVENT HANDLERS ====================
@@ -536,6 +587,8 @@ func _log(text: String) -> void:
 func _on_war_declared(attacker_id: int, defender_id: int) -> void:
 	if is_fast_forwarding:
 		ff_counters["wars"] += 1
+		if attacker_id == player_civ_id or defender_id == player_civ_id:
+			ff_should_pause = true
 	var a := GameState.get_civilization(attacker_id)
 	var d := GameState.get_civilization(defender_id)
 	if a and d:
@@ -545,6 +598,8 @@ func _on_war_declared(attacker_id: int, defender_id: int) -> void:
 func _on_hero_spawned(hero_id: int, civ_id: int, _type: Enums.HeroType) -> void:
 	if is_fast_forwarding:
 		ff_counters["heroes"] += 1
+		if civ_id == player_civ_id:
+			ff_should_pause = true
 	var hero := GameState.get_hero(hero_id)
 	var civ := GameState.get_civilization(civ_id)
 	if hero and civ:
@@ -554,6 +609,8 @@ func _on_hero_spawned(hero_id: int, civ_id: int, _type: Enums.HeroType) -> void:
 
 
 func _on_hero_died(hero_id: int, civ_id: int) -> void:
+	if is_fast_forwarding and civ_id == player_civ_id:
+		ff_should_pause = true
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
 		_log("[color=#999]A hero of %s has died[/color]" % civ.civ_name)
@@ -562,12 +619,16 @@ func _on_hero_died(hero_id: int, civ_id: int) -> void:
 func _on_golden_age_started(civ_id: int) -> void:
 	if is_fast_forwarding:
 		ff_counters["golden_ages"] += 1
+		if civ_id == player_civ_id:
+			ff_should_pause = true
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
 		_log("[color=#fd5]%s enters a Golden Age[/color]" % civ.civ_name)
 
 
 func _on_golden_age_ended(civ_id: int) -> void:
+	if is_fast_forwarding and civ_id == player_civ_id:
+		ff_should_pause = true
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
 		_log("[color=#a85]%s Golden Age ended[/color]" % civ.civ_name)
@@ -576,6 +637,8 @@ func _on_golden_age_ended(civ_id: int) -> void:
 func _on_tech_emerged(civ_id: int, tech_name: String) -> void:
 	if is_fast_forwarding:
 		ff_counters["techs"] += 1
+		if civ_id == player_civ_id:
+			ff_should_pause = true
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
 		_log("[color=#5e5]%s discovers %s[/color]" % [civ.civ_name, tech_name])
@@ -584,6 +647,7 @@ func _on_tech_emerged(civ_id: int, tech_name: String) -> void:
 func _on_civ_collapsed(civ_id: int) -> void:
 	if is_fast_forwarding:
 		ff_counters["collapses"] += 1
+		ff_should_pause = true  # Always pause on any collapse
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
 		_log("[color=#f33]%s has COLLAPSED[/color]" % civ.civ_name)

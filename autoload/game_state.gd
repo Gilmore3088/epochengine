@@ -6,6 +6,7 @@ var current_year: int = 0
 var game_speed: Enums.GameSpeed = Enums.GameSpeed.NORMAL
 var is_running: bool = false
 var current_overlay: int = Enums.MapOverlay.POLITICAL
+var player_civ_id: int = 0
 
 # Core data dictionaries keyed by id
 var regions: Dictionary = {}         # {int: RegionData}
@@ -183,3 +184,13 @@ func set_overlay(overlay: int) -> void:
 	if current_overlay != overlay:
 		current_overlay = overlay
 		EventBus.overlay_changed.emit(overlay)
+
+
+# --- Player ---
+
+func get_player_civ() -> CivilizationData:
+	return civilizations.get(player_civ_id)
+
+
+func is_player_civ(civ_id: int) -> bool:
+	return civ_id == player_civ_id

@@ -70,6 +70,7 @@ func _create_save_data() -> Resource:
 	save.set_meta("save_version", 1)
 	save.set_meta("current_year", GameState.current_year)
 	save.set_meta("next_hero_id", GameState.next_hero_id)
+	save.set_meta("player_civ_id", GameState.player_civ_id)
 
 	# Serialize regions
 	var region_list: Array[Dictionary] = []
@@ -104,6 +105,7 @@ func _create_save_data() -> Resource:
 			"capital_region_id": civ.capital_region_id,
 			"hero_ids": civ.hero_ids,
 			"is_collapsed": civ.is_collapsed,
+			"is_player": civ.is_player,
 			"golden_age_years_remaining": civ.golden_age_years_remaining,
 			"golden_age_cooldown": civ.golden_age_cooldown,
 			"knowledge": civ.knowledge,
@@ -143,6 +145,7 @@ func _restore_save_data(save: Resource) -> void:
 	## Restore all game state from a save Resource.
 	GameState.current_year = save.get_meta("current_year")
 	GameState.next_hero_id = save.get_meta("next_hero_id")
+	GameState.player_civ_id = save.get_meta("player_civ_id", 0)
 
 	# Restore regions
 	GameState.regions.clear()
@@ -176,6 +179,7 @@ func _restore_save_data(save: Resource) -> void:
 		civ.capital_region_id = data["capital_region_id"]
 		civ.hero_ids = data["hero_ids"]
 		civ.is_collapsed = data["is_collapsed"]
+		civ.is_player = data.get("is_player", false)
 		civ.golden_age_years_remaining = data["golden_age_years_remaining"]
 		civ.golden_age_cooldown = data["golden_age_cooldown"]
 		civ.knowledge = data["knowledge"]

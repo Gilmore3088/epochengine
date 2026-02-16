@@ -14,6 +14,7 @@ extends Resource
 @export var capital_region_id: int = -1
 @export var hero_ids: Array[int] = []
 @export var is_collapsed: bool = false
+@export var is_player: bool = false
 
 # Golden age state
 @export var golden_age_years_remaining: int = 0
@@ -34,6 +35,8 @@ extends Resource
 
 # War tracking
 @export var war_targets: Array[int] = []  # civ IDs at war with
+@export var war_durations: Dictionary = {}  # {civ_id: years_at_war}
+@export var peace_cooldowns: Dictionary = {}  # {civ_id: years_remaining}
 @export var alliance_partners: Array[int] = []  # civ IDs allied with
 @export var consecutive_low_stability_years: int = 0
 

@@ -29,7 +29,7 @@ func test_overextension_no_penalty_under_threshold() -> void:
 	var civ := _make_civ(50.0, 0, 5000)
 	civ.food_stockpile = 0  # Neutral food factor
 	var regions: Array[RegionData] = []
-	for i in 7:  # 7 regions, under threshold of 25
+	for i in 7:  # 7 regions, within admin capacity
 		regions.append(_make_region(i, 0))
 
 	# Stability should not have overextension penalty
@@ -50,7 +50,7 @@ func test_overextension_penalty_above_threshold() -> void:
 		small_regions.append(_make_region(i, 0))
 
 	var large_regions: Array[RegionData] = []
-	for i in 30:  # 30 regions, 5 above threshold of 25
+	for i in 30:  # 30 regions, well above admin capacity
 		large_regions.append(_make_region(i, 0))
 
 	seed(42)
@@ -60,7 +60,7 @@ func test_overextension_penalty_above_threshold() -> void:
 	seed(42)  # Same seed for same random values
 	var stab_large := StabilitySimulation.recalculate(civ, large_regions)
 
-	# 30 regions = 5 excess * 1.0 = 5 points penalty (threshold is 25)
+	# 30 regions = well above admin capacity, quadratic penalty applies
 	assert_true(stab_small > stab_large,
 		"More regions should reduce stability via overextension")
 

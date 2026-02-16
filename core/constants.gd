@@ -18,8 +18,10 @@ const RANDOM_VARIANCE_MAX := 1.02
 const STABILITY_MIN := 0.0
 const STABILITY_MAX := 100.0
 const STABILITY_START := 50.0
-const WAR_EXHAUSTION_PER_FRONT_MIN := 2.0
-const WAR_EXHAUSTION_PER_FRONT_MAX := 5.0
+const WAR_EXHAUSTION_BASE := 1.5  # base exhaustion per war per year
+const WAR_EXHAUSTION_ESCALATION := 0.5  # additional exhaustion per year of war duration
+const WAR_EXHAUSTION_MAX_PER_FRONT := 8.0  # cap per front
+const WAR_FATIGUE_PEACE_RECOVERY := 0.6  # fraction of duration reset on peace (partial memory)
 const RESOURCE_SHORTAGE_PENALTY_MIN := 1.0
 const RESOURCE_SHORTAGE_PENALTY_MAX := 8.0
 const RANDOM_POLITICAL_SHIFT_MIN := -2.0
@@ -40,8 +42,15 @@ const BATTLE_VARIANCE_MIN := 0.85
 const BATTLE_VARIANCE_MAX := 1.15
 const WAR_STABILITY_LOSS_MIN := 5
 const WAR_STABILITY_LOSS_MAX := 15
-const WAR_DECLARATION_STRENGTH_RATIO := 1.3
 const WAR_DECLARATION_STABILITY_THRESHOLD := 45.0
+const WAR_PARITY_THRESHOLD := 0.3  # strength ratio within 30% = parity, lowers war chance
+const WAR_BASE_CHANCE := 0.04  # base probability per eligible neighbor per year
+const WAR_IMBALANCE_MULTIPLIER := 2.0  # how much strength advantage increases war chance
+const WAR_PARITY_DAMPENER := 0.2  # multiplier when in parity (makes war unlikely)
+const PEACE_COOLDOWN_YEARS := 15  # years before can redeclare war on same civ
+const ALLIANCE_BASE_CHANCE := 0.06  # base probability of seeking alliance per neighbor per year
+const ALLIANCE_STABILITY_THRESHOLD := 50.0  # min stability to seek alliance
+const ALLIANCE_SHARED_ENEMY_BONUS := 0.15  # extra chance if both at war with same civ
 
 # --- Heroes ---
 const HERO_LIFESPAN_MIN := 40
@@ -103,13 +112,24 @@ const INFRASTRUCTURE_MAX_LEVEL := 5
 const INFRASTRUCTURE_UPGRADE_COST := 15  # base cost * (level+1)
 const INFRASTRUCTURE_AUTO_INVEST_THRESHOLD := 40  # min surplus before AI upgrades
 
+# --- Admin Capacity & Overextension ---
+const ADMIN_CAPACITY_BASE := 5  # base regions a civ can manage
+const ADMIN_INFRA_BONUS_PER_LEVEL := 0.2  # each infra level across all regions adds capacity
+const ADMIN_STABILITY_DIVISOR := 20.0  # stability / this = bonus admin capacity
+const ADMIN_OVEREXTENSION_DIVISOR := 10.0  # penalty = excess^2 / this
+const DISCONNECTED_TERRITORY_PENALTY := 3.0  # stability drain per disconnected region
+
+# --- Compact State Bonus ---
+const COMPACT_STATE_THRESHOLD := 5  # region count at or below = compact
+const COMPACT_STABILITY_FLOOR := 5.0  # minimum stability bonus for compact civs
+const COMPACT_WAR_EXHAUSTION_REDUCTION := 0.25  # 25% less war exhaustion
+const COMPACT_DEFENSE_BONUS := 0.25  # 25% extra defense for compact civs
+
 # --- Expansion / Snowball Control ---
 const EXPANSION_BASE_PRODUCTION_COST := 15  # base production to settle a region
 const EXPANSION_COST_ESCALATION := 5  # additional cost per region above threshold
 const EXPANSION_SETTLER_POP := 300  # population moved to new region
-const OVEREXTENSION_REGION_THRESHOLD := 25  # regions before overextension kicks in
-const OVEREXTENSION_STABILITY_PER_REGION := 1.0  # stability drain per excess region
-const DISCONNECTED_TERRITORY_PENALTY := 3.0  # stability drain per disconnected region
+const EXPANSION_FRICTION_DIVISOR := 10.0  # factor = 1 / (1 + region_count / this)
 
 # --- Resource Depletion ---
 const OVERUSE_THRESHOLD_YEARS := 10

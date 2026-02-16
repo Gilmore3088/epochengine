@@ -205,6 +205,10 @@ func _print_aggregate() -> void:
 	var all_completed := true
 	var runs_with_collapse := 0
 	var runs_with_golden_age := 0
+	var runs_with_multi_civ := 0
+	var total_final_alive := 0
+	var runs_with_wars := 0
+	var total_peace_treaties := 0
 
 	for r in run_results:
 		total_collapses += r["collapses"]
@@ -222,8 +226,15 @@ func _print_aggregate() -> void:
 			runs_with_collapse += 1
 		if r["golden_ages"] > 0:
 			runs_with_golden_age += 1
+		if r["final_civs_alive"] >= 2:
+			runs_with_multi_civ += 1
+		total_final_alive += r["final_civs_alive"]
+		if r["wars"] > 0:
+			runs_with_wars += 1
+		total_peace_treaties += r["peace_treaties"]
 
 	var avg_time := total_time / RUNS
+	var avg_alive := float(total_final_alive) / RUNS
 
 	print("")
 	print("Performance:")
@@ -238,7 +249,7 @@ func _print_aggregate() -> void:
 	print("  Expansions: %d | Techs: %d" % [total_expansions, total_techs])
 	print("")
 
-	print("ACCEPTANCE CRITERIA:")
+	print("ACCEPTANCE CRITERIA (Stage 1):")
 	print("  [%s] 500-year simulation without crash" % ("PASS" if all_completed else "FAIL"))
 	print("  [%s] 10-year fast-forward < 2000ms (peak: %.0fms)" % [
 		"PASS" if max_10yr < 2000 else "FAIL", max_10yr
@@ -248,6 +259,22 @@ func _print_aggregate() -> void:
 	])
 	print("  [%s] At least 1 golden age in 10 runs (%d found)" % [
 		"PASS" if runs_with_golden_age >= 1 else "FAIL", runs_with_golden_age
+	])
+	print("")
+	print("ACCEPTANCE CRITERIA (Stage 2 - Equilibrium):")
+	print("  [%s] Multiple civs survive to Y500 in >50%% of runs (%d/%d)" % [
+		"PASS" if runs_with_multi_civ > RUNS / 2 else "FAIL",
+		runs_with_multi_civ, RUNS
+	])
+	print("  [%s] Average civs alive at Y500 >= 1.5 (avg: %.1f)" % [
+		"PASS" if avg_alive >= 1.5 else "FAIL", avg_alive
+	])
+	print("  [%s] Wars occur in most runs (%d/%d)" % [
+		"PASS" if runs_with_wars > RUNS / 2 else "FAIL",
+		runs_with_wars, RUNS
+	])
+	print("  [%s] Peace treaties occur (total: %d)" % [
+		"PASS" if total_peace_treaties > 0 else "FAIL", total_peace_treaties
 	])
 	print("")
 

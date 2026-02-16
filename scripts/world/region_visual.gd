@@ -449,10 +449,13 @@ func _on_mouse_exited() -> void:
 
 
 func _on_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		is_selected = true
-		update_appearance()
-		EventBus.region_selected.emit(region_data.id)
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			is_selected = true
+			update_appearance()
+			EventBus.region_selected.emit(region_data.id)
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			EventBus.region_right_clicked.emit(region_data.id, event.global_position)
 
 
 func _on_deselected() -> void:

@@ -123,8 +123,9 @@ func _ready() -> void:
 	EventBus.overlay_changed.connect(_on_overlay_changed)
 
 
-func _input(event: InputEvent) -> void:
-	# Detect clicks that miss all regions (click-off to deselect)
+func _unhandled_input(event: InputEvent) -> void:
+	# Detect clicks that miss all regions (click-off to deselect).
+	# Using _unhandled_input so UI button clicks don't trigger deselect.
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		_click_handled = false
 		call_deferred("_check_deselect")
@@ -150,6 +151,9 @@ func _build_map() -> void:
 
 	# Compute Voronoi polygons
 	_compute_voronoi()
+
+	# Compute region size factors from polygon areas
+	_compute_size_factors()
 
 	# Create region visuals
 	for region_id in region_polygons:
@@ -264,6 +268,44 @@ func _clip_polygon(
 		prev_d = curr_d
 
 	return output
+
+
+func _compute_size_factors() -> void:
+	## Compute each region's size_factor from Voronoi polygon area.
+	## Uses the Shoelace formula. Normalizes so 1.0 = average region.
+	var areas: Dictionary = {}
+	var total_area := 0.0
+	var count := 0
+
+	for region_id in region_polygons:
+		var poly: PackedVector2Array = region_polygons[region_id]
+		if poly.size() < 3:
+			continue
+		var area := _polygon_area(poly)
+		areas[region_id] = area
+		total_area += area
+		count += 1
+
+	if count == 0:
+		return
+
+	var avg_area := total_area / float(count)
+
+	for region_id in areas:
+		var region_data: RegionData = GameState.get_region(region_id)
+		if region_data:
+			region_data.size_factor = areas[region_id] / avg_area
+
+
+static func _polygon_area(poly: PackedVector2Array) -> float:
+	## Shoelace formula for polygon area.
+	var area := 0.0
+	var n := poly.size()
+	for i in n:
+		var j := (i + 1) % n
+		area += poly[i].x * poly[j].y
+		area -= poly[j].x * poly[i].y
+	return absf(area) * 0.5
 
 
 func _build_all_borders() -> void:

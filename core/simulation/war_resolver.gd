@@ -108,7 +108,14 @@ static func _calculate_strength(
 		if hero and hero.type == Enums.HeroType.GENERAL:
 			hero_bonus += hero.get_modifier_value()
 
-	return military * morale * equipment * doctrine * terrain * supply * variance * hero_bonus
+	# Compact state defense bonus: small civs fight harder on their own turf
+	var compact_bonus := 1.0
+	if not is_attacker:
+		var defender_regions := GameState.get_regions_by_owner(civ.id).size()
+		if defender_regions <= Constants.COMPACT_STATE_THRESHOLD:
+			compact_bonus += Constants.COMPACT_DEFENSE_BONUS
+
+	return military * morale * equipment * doctrine * terrain * supply * variance * hero_bonus * compact_bonus
 
 
 static func _morale_from_stability(civ: CivilizationData) -> float:
@@ -128,10 +135,12 @@ static func _doctrine_modifier(civ: CivilizationData) -> float:
 
 static func _terrain_modifier(region: RegionData, is_attacker: bool) -> float:
 	## Defender gets terrain bonus, attacker gets penalty.
+	## Larger regions (size_factor > 1) are harder to attack and easier to defend.
+	var size_mod := lerpf(1.0, region.size_factor, 0.3)  # 30% influence
 	if is_attacker:
-		return 1.0 / region.defense_modifier
+		return 1.0 / (region.defense_modifier * size_mod)
 	else:
-		return region.defense_modifier
+		return region.defense_modifier * size_mod
 
 
 static func _supply_modifier(civ: CivilizationData, region: RegionData) -> float:

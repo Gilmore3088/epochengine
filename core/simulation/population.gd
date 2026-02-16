@@ -22,7 +22,8 @@ static func calculate_growth(region: RegionData, civ: CivilizationData) -> int:
 		effective_rate *= 1.5
 
 	# Carrying capacity: growth slows as region approaches food-based limit
-	var capacity := (region.food_yield + region.infrastructure_level) * Constants.FOOD_PER_POP_DIVISOR
+	# Larger regions (size_factor > 1) support more population
+	var capacity := int((region.food_yield + region.infrastructure_level) * Constants.FOOD_PER_POP_DIVISOR * region.size_factor)
 	if capacity > 0 and region.population > 0:
 		var capacity_ratio := clampf(1.0 - float(region.population) / float(capacity), -1.0, 1.0)
 		effective_rate *= maxf(capacity_ratio, -0.05)  # Cap decline at 5% per year

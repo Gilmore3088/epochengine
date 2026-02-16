@@ -14,6 +14,7 @@ extends Resource
 @export var resource_stock: Dictionary = {}  # {"coal": 100, "oil": 50}
 @export var adjacency_list: Array[int] = []
 @export var infrastructure_level: int = 0  # 0-5
+@export var size_factor: float = 1.0  # normalized area (1.0 = average region)
 
 
 func _init(

@@ -51,6 +51,10 @@ signal food_shortage(civ_id: int, stockpile: int)
 signal production_shortage(civ_id: int, stockpile: int)
 signal infrastructure_upgraded(civ_id: int, region_name: String, new_level: int)
 
+# --- Player Actions ---
+signal region_right_clicked(region_id: int, screen_position: Vector2)
+signal player_action_queued(action_type: String, details: Dictionary)
+
 # --- UI ---
 signal region_selected(region_id: int)
 signal region_deselected()

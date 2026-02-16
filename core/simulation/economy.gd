@@ -13,8 +13,8 @@ static func calculate_food_production(
 	for region in owned_regions:
 		var food := region.food_yield + region.infrastructure_level
 
-		# Visionary hero bonus (applies to production but not food)
-		# Food is unmodified by heroes
+		# Scale by region size (larger regions produce more)
+		food = int(food * region.size_factor)
 
 		# Golden age bonus
 		if civ.is_in_golden_age():
@@ -31,6 +31,9 @@ static func calculate_production_output(
 	var total := 0
 	for region in owned_regions:
 		var prod := region.production_yield + region.infrastructure_level
+
+		# Scale by region size (larger regions produce more)
+		prod = int(prod * region.size_factor)
 
 		# Visionary hero bonus
 		var hero_bonus := 1.0
@@ -110,7 +113,8 @@ static func calculate_expansion_cost(civ: CivilizationData, region_count: int) -
 	## Production cost to expand into a new region.
 	## Escalates with number of owned regions (snowball control).
 	var base_cost := Constants.EXPANSION_BASE_PRODUCTION_COST
-	var excess := maxi(region_count - Constants.OVEREXTENSION_REGION_THRESHOLD, 0)
+	# Cost escalates past admin capacity base
+	var excess := maxi(region_count - Constants.ADMIN_CAPACITY_BASE, 0)
 	return base_cost + excess * Constants.EXPANSION_COST_ESCALATION
 
 

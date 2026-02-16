@@ -18,14 +18,17 @@ static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 	match state:
 		Enums.CivState.DECLINING:
 			events.append_array(_try_seek_peace(civ))
+			events.append_array(_try_seek_alliance(civ))
 		Enums.CivState.STABLE:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
 			events.append_array(_try_invest_infrastructure(civ))
+			events.append_array(_try_seek_alliance(civ))
 		Enums.CivState.GROWING:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
 			events.append_array(_try_invest_infrastructure(civ))
+			events.append_array(_try_seek_alliance(civ))
 
 	return events
 
@@ -53,8 +56,9 @@ static func _try_expand(civ: CivilizationData) -> Array[Dictionary]:
 	if neutral_targets.is_empty():
 		return []
 
-	# Weighted by expansion bias
-	if randf() > civ.expansion_bias:
+	# Expansion friction: growth slows as empire gets larger
+	var expansion_factor := 1.0 / (1.0 + float(region_count) / Constants.EXPANSION_FRICTION_DIVISOR)
+	if randf() > civ.expansion_bias * expansion_factor:
 		return []
 
 	# Pick highest food_yield neutral region
@@ -92,7 +96,10 @@ static func _try_expand(civ: CivilizationData) -> Array[Dictionary]:
 
 
 static func _try_declare_war(civ: CivilizationData) -> Array[Dictionary]:
-	## Attempt to declare war on a weaker neighbor.
+	## Attempt to declare war using border tension model.
+	## Military parity (within 30%) dampens war probability (Cold War standoff).
+	## Military imbalance (attacker stronger) increases probability.
+	## Weaker civs never initiate.
 	if civ.stability < Constants.WAR_DECLARATION_STABILITY_THRESHOLD:
 		return []
 
@@ -102,20 +109,34 @@ static func _try_declare_war(civ: CivilizationData) -> Array[Dictionary]:
 			continue
 		if civ.alliance_partners.has(neighbor_id):
 			continue
+		# Peace cooldown prevents immediate redeclaration
+		if civ.peace_cooldowns.get(neighbor_id, 0) > 0:
+			continue
 
 		var neighbor := GameState.get_civilization(neighbor_id)
 		if not neighbor or neighbor.is_collapsed:
 			continue
 
-		if civ.military_strength < neighbor.military_strength * Constants.WAR_DECLARATION_STRENGTH_RATIO:
+		var strength_ratio := civ.military_strength / maxf(neighbor.military_strength, 1.0)
+
+		# Weaker civs don't initiate war (below parity band)
+		if strength_ratio < (1.0 - Constants.WAR_PARITY_THRESHOLD):
 			continue
 
-		var strength_ratio := civ.military_strength / maxf(neighbor.military_strength, 1.0)
-		var war_chance := 0.2 * strength_ratio * civ.aggression_bias
+		var war_chance: float
+		if absf(strength_ratio - 1.0) <= Constants.WAR_PARITY_THRESHOLD:
+			# Military parity - evenly matched civs avoid costly wars
+			war_chance = Constants.WAR_BASE_CHANCE * Constants.WAR_PARITY_DAMPENER * civ.aggression_bias
+		else:
+			# Attacker is stronger - imbalance encourages opportunistic war
+			var imbalance := (strength_ratio - 1.0) / Constants.WAR_PARITY_THRESHOLD
+			war_chance = Constants.WAR_BASE_CHANCE * minf(imbalance, Constants.WAR_IMBALANCE_MULTIPLIER) * civ.aggression_bias
 
 		if randf() < war_chance:
 			civ.war_targets.append(neighbor_id)
 			neighbor.war_targets.append(civ.id)
+			civ.war_durations[neighbor_id] = 0
+			neighbor.war_durations[civ.id] = 0
 
 			return [{
 				"type": "war_declared",
@@ -133,14 +154,23 @@ static func _try_seek_peace(civ: CivilizationData) -> Array[Dictionary]:
 	if civ.war_targets.is_empty():
 		return []
 
-	var peace_chance := (1.0 - civ.stability / Constants.STABILITY_MAX) * civ.diplomacy_bias
+	# Longer wars increase peace desire
+	var longest_war := 0
+	for tid in civ.war_targets:
+		longest_war = maxi(longest_war, int(civ.war_durations.get(tid, 0)))
+	var fatigue_boost := minf(float(longest_war) * 0.05, 0.4)
+	var peace_chance := ((1.0 - civ.stability / Constants.STABILITY_MAX) + fatigue_boost) * civ.diplomacy_bias
 	if randf() < peace_chance:
 		var target_id: int = civ.war_targets[0]
 		var target := GameState.get_civilization(target_id)
 
 		civ.war_targets.erase(target_id)
+		civ.war_durations.erase(target_id)
+		civ.peace_cooldowns[target_id] = Constants.PEACE_COOLDOWN_YEARS
 		if target:
 			target.war_targets.erase(civ.id)
+			target.war_durations.erase(civ.id)
+			target.peace_cooldowns[civ.id] = Constants.PEACE_COOLDOWN_YEARS
 			return [{
 				"type": "peace",
 				"civ_a_id": civ.id,
@@ -172,6 +202,51 @@ static func _try_invest_infrastructure(civ: CivilizationData) -> Array[Dictionar
 				"region_id": region.id,
 				"region_name": region.region_name,
 				"new_level": region.infrastructure_level,
+			}]
+
+	return []
+
+
+static func _try_seek_alliance(civ: CivilizationData) -> Array[Dictionary]:
+	## AI seeks alliances with non-hostile neighbors.
+	## Higher diplomacy_bias and shared enemies increase probability.
+	if civ.stability < Constants.ALLIANCE_STABILITY_THRESHOLD:
+		return []
+
+	var neighbor_ids := GameState.get_neighboring_civs(civ.id)
+	for neighbor_id in neighbor_ids:
+		if civ.alliance_partners.has(neighbor_id):
+			continue
+		if civ.war_targets.has(neighbor_id):
+			continue
+
+		var neighbor := GameState.get_civilization(neighbor_id)
+		if not neighbor or neighbor.is_collapsed:
+			continue
+
+		# Shared enemy bonus: both at war with same civ
+		var shared_enemy_bonus := 0.0
+		for enemy_id in civ.war_targets:
+			if neighbor.war_targets.has(enemy_id):
+				shared_enemy_bonus = Constants.ALLIANCE_SHARED_ENEMY_BONUS
+				break
+
+		var alliance_chance := (
+			Constants.ALLIANCE_BASE_CHANCE
+			* civ.diplomacy_bias
+			* neighbor.diplomacy_bias
+			+ shared_enemy_bonus
+		)
+
+		if randf() < alliance_chance:
+			civ.alliance_partners.append(neighbor_id)
+			neighbor.alliance_partners.append(civ.id)
+			return [{
+				"type": "alliance_formed",
+				"civ_a_id": civ.id,
+				"civ_b_id": neighbor_id,
+				"civ_a_name": civ.civ_name,
+				"civ_b_name": neighbor.civ_name,
 			}]
 
 	return []

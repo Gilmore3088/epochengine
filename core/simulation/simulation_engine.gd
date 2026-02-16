@@ -5,6 +5,8 @@ extends RefCounted
 ## and returns all events that occurred. No signals, no UI - just math.
 ## TurnManager wraps this and handles signal emission.
 
+static var _MetricsLogger := preload("res://core/simulation/metrics_logger.gd")
+
 
 static func process_year() -> Dictionary:
 	## Run one full simulation year. Returns all events for the year.
@@ -32,6 +34,9 @@ static func process_year() -> Dictionary:
 	# Step 3.5: Collapse civs with no regions (lost everything to war)
 	_step_check_regionless(events)
 
+	# Step 3.7: Tick war durations
+	_step_war_durations()
+
 	# Step 4: Stability Recalculation
 	_step_stability(events)
 
@@ -49,6 +54,9 @@ static func process_year() -> Dictionary:
 
 	# Step 9: Tech Emergence
 	_step_tech_emergence(events)
+
+	# Step 10: Metrics logging (if enabled)
+	_MetricsLogger.log_year()
 
 	return events
 
@@ -105,7 +113,11 @@ static func _step_stability(events: Dictionary) -> void:
 
 static func _step_ai_decisions(events: Dictionary) -> void:
 	for civ in GameState.get_alive_civilizations():
-		var ai_events := AILogic.make_decisions(civ)
+		var ai_events: Array[Dictionary]
+		if GameState.is_player_civ(civ.id):
+			ai_events = PlayerActions.process_queued_actions(civ)
+		else:
+			ai_events = AILogic.make_decisions(civ)
 		for event in ai_events:
 			events["ai_events"].append(event)
 
@@ -210,6 +222,22 @@ static func _step_tech_emergence(events: Dictionary) -> void:
 				"civ_name": civ.civ_name,
 				"tech_name": tech_name,
 			})
+
+
+# --- War Duration Tracking ---
+
+static func _step_war_durations() -> void:
+	for civ in GameState.get_alive_civilizations():
+		for target_id in civ.war_targets:
+			civ.war_durations[target_id] = civ.war_durations.get(target_id, 0) + 1
+		# Tick down peace cooldowns
+		var expired: Array[int] = []
+		for cid in civ.peace_cooldowns:
+			civ.peace_cooldowns[cid] = civ.peace_cooldowns[cid] - 1
+			if civ.peace_cooldowns[cid] <= 0:
+				expired.append(cid)
+		for cid in expired:
+			civ.peace_cooldowns.erase(cid)
 
 
 # --- Helpers ---
