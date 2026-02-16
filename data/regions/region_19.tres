@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/region_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 19
+region_name = "Reed Marsh"
+terrain_type = 0
+population = 1800
+owner_id = -1
+food_yield = 5
+production_yield = 3
+defense_modifier = 0.8
+resource_stock = {}
+adjacency_list = Array[int]([17, 18, 20, 30, 31])
+infrastructure_level = 0

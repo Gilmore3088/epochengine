@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="CivilizationData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/civilization_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 0
+civ_name = "River Basin Power"
+color = Color(0.2, 0.6, 0.3, 1)
+stability = 50.0
+total_population = 10000
+food_stockpile = 100
+production_stockpile = 50
+military_strength = 100.0
+capital_region_id = 15
+hero_ids = []
+is_collapsed = false
+golden_age_years_remaining = 0
+golden_age_cooldown = 0
+knowledge = 10.0
+energy = 5.0
+social_coordination = 10.0
+economic_surplus = 15.0
+military_pressure = 5.0
+expansion_bias = 0.7
+aggression_bias = 0.4
+diplomacy_bias = 0.5
+economy_bias = 0.8
+war_targets = []
+alliance_partners = []
+consecutive_low_stability_years = 0
+technologies = []

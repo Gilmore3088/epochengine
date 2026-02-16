@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/region_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 33
+region_name = "Horizon Vale"
+terrain_type = 1
+population = 1600
+owner_id = -1
+food_yield = 3
+production_yield = 3
+defense_modifier = 0.7
+resource_stock = {}
+adjacency_list = Array[int]([22, 31, 32, 34])
+infrastructure_level = 0

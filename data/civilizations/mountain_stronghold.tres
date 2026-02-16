@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="CivilizationData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/civilization_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 1
+civ_name = "Mountain Stronghold"
+color = Color(0.6, 0.4, 0.2, 1)
+stability = 55.0
+total_population = 7000
+food_stockpile = 50
+production_stockpile = 30
+military_strength = 120.0
+capital_region_id = 3
+hero_ids = []
+is_collapsed = false
+golden_age_years_remaining = 0
+golden_age_cooldown = 0
+knowledge = 8.0
+energy = 5.0
+social_coordination = 12.0
+economic_surplus = 8.0
+military_pressure = 10.0
+expansion_bias = 0.3
+aggression_bias = 0.5
+diplomacy_bias = 0.7
+economy_bias = 0.3
+war_targets = []
+alliance_partners = []
+consecutive_low_stability_years = 0
+technologies = []

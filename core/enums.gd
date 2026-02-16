@@ -1,0 +1,61 @@
+class_name Enums
+extends RefCounted
+
+## All game enumerations for Epoch Engine.
+
+enum TerrainType {
+	RIVER_BASIN,
+	PLAINS,
+	MOUNTAINS,
+	DESERT,
+	JUNGLE,
+	COASTLINE,
+	TUNDRA,
+}
+
+enum HeroType {
+	GENERAL,
+	REFORMER,
+	VISIONARY,
+}
+
+enum CivState {
+	STABLE,
+	GROWING,
+	DECLINING,
+	COLLAPSED,
+}
+
+enum DiplomaticRelation {
+	NEUTRAL,
+	ALLIED,
+	AT_WAR,
+}
+
+enum GameSpeed {
+	NORMAL,
+	FAST,
+	FASTEST,
+	PAUSED,
+}
+
+enum TurnPhase {
+	POPULATION_GROWTH,
+	RESOURCE_PRODUCTION,
+	RESOURCE_CONSUMPTION,
+	STABILITY_RECALCULATION,
+	AI_DECISIONS,
+	WAR_RESOLUTION,
+	HERO_AGING,
+	GOLDEN_AGE_EVALUATION,
+	TECH_EMERGENCE,
+	END_OF_YEAR_LOGGING,
+}
+
+enum MapOverlay {
+	TERRAIN,
+	RESOURCES,
+	SUPPLY_LINES,
+	ALLIANCES,
+	POLITICAL,
+}

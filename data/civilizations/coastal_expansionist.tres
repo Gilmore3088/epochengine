@@ -1,0 +1,32 @@
+[gd_resource type="Resource" script_class="CivilizationData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/civilization_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 2
+civ_name = "Coastal Expansionist"
+color = Color(0.2, 0.4, 0.7, 1)
+stability = 48.0
+total_population = 8500
+food_stockpile = 80
+production_stockpile = 70
+military_strength = 90.0
+capital_region_id = 25
+hero_ids = []
+is_collapsed = false
+golden_age_years_remaining = 0
+golden_age_cooldown = 0
+knowledge = 12.0
+energy = 8.0
+social_coordination = 8.0
+economic_surplus = 12.0
+military_pressure = 8.0
+expansion_bias = 0.6
+aggression_bias = 0.7
+diplomacy_bias = 0.3
+economy_bias = 0.7
+war_targets = []
+alliance_partners = []
+consecutive_low_stability_years = 0
+technologies = []
