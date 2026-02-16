@@ -46,9 +46,15 @@ signal ai_decision_made(civ_id: int, decision_type: String, details: Dictionary)
 signal alliance_formed(civ_a_id: int, civ_b_id: int)
 signal alliance_broken(civ_a_id: int, civ_b_id: int)
 
+# --- Economy ---
+signal food_shortage(civ_id: int, stockpile: int)
+signal production_shortage(civ_id: int, stockpile: int)
+signal infrastructure_upgraded(civ_id: int, region_name: String, new_level: int)
+
 # --- UI ---
 signal region_selected(region_id: int)
 signal region_deselected()
 signal game_speed_changed(speed: Enums.GameSpeed)
 signal overlay_changed(overlay: Enums.MapOverlay)
 signal fast_forward_summary_ready(events: Array[Dictionary])
+signal zoom_changed(zoom_level: float)

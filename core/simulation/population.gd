@@ -14,13 +14,20 @@ static func calculate_growth(region: RegionData, civ: CivilizationData) -> int:
 		Constants.RANDOM_VARIANCE_MIN, Constants.RANDOM_VARIANCE_MAX
 	)
 
-	var growth_factor := (1.0 + base_rate) * food_mod * stability_mod * variance
+	# Modifiers only affect the growth RATE, not the base population
+	var effective_rate := base_rate * food_mod * stability_mod * variance
 
-	# Golden age bonus
+	# Golden age gives a modest growth bonus
 	if civ.is_in_golden_age():
-		growth_factor *= (1.0 + Constants.GOLDEN_AGE_FOOD_BONUS)
+		effective_rate *= 1.5
 
-	var new_pop := int(region.population * growth_factor)
+	# Carrying capacity: growth slows as region approaches food-based limit
+	var capacity := (region.food_yield + region.infrastructure_level) * Constants.FOOD_PER_POP_DIVISOR
+	if capacity > 0 and region.population > 0:
+		var capacity_ratio := clampf(1.0 - float(region.population) / float(capacity), -1.0, 1.0)
+		effective_rate *= maxf(capacity_ratio, -0.05)  # Cap decline at 5% per year
+
+	var new_pop := int(region.population * (1.0 + effective_rate))
 	return maxi(new_pop, 0)
 
 
@@ -45,9 +52,9 @@ static func _get_food_modifier(civ: CivilizationData) -> float:
 	var food_per_capita := float(civ.food_stockpile) / float(civ.total_population)
 
 	if food_per_capita > 0.01:
-		return clampf(1.0 + food_per_capita * 10.0, 1.0, Constants.FOOD_MODIFIER_MAX)
+		return clampf(1.0 + food_per_capita * 2.0, 1.0, Constants.FOOD_MODIFIER_MAX)
 	elif food_per_capita < -0.005:
-		return clampf(1.0 + food_per_capita * 20.0, Constants.FOOD_MODIFIER_MIN, 1.0)
+		return clampf(1.0 + food_per_capita * 5.0, Constants.FOOD_MODIFIER_MIN, 1.0)
 	else:
 		return 1.0
 

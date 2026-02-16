@@ -5,13 +5,13 @@
 [resource]
 script = ExtResource("1")
 id = 5
-region_name = "Cloud Summit"
-terrain_type = 2
-population = 700
+region_name = "Highland Pasture"
+terrain_type = 1
+population = 1200
 owner_id = -1
-food_yield = 1
-production_yield = 1
-defense_modifier = 1.4
+food_yield = 3
+production_yield = 3
+defense_modifier = 0.7
 resource_stock = {}
 adjacency_list = Array[int]([3, 4, 6, 16])
 infrastructure_level = 0

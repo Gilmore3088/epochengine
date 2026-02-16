@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/region_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 90
+region_name = "Whale Rock"
+terrain_type = 5
+population = 800
+owner_id = -1
+food_yield = 3
+production_yield = 4
+defense_modifier = 0.8
+resource_stock = {}
+adjacency_list = Array[int]([88, 89, 91, 92])
+infrastructure_level = 0

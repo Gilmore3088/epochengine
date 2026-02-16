@@ -1,6 +1,8 @@
 extends PanelContainer
 
 ## Region detail panel shown when a region is selected.
+## Historical parchment-on-dark theme using UITheme.
+## Closes on Esc, click-off, or clicking another region.
 
 var name_label: Label
 var terrain_label: Label
@@ -12,6 +14,10 @@ var defense_label: Label
 var infrastructure_label: Label
 var resources_label: Label
 
+# Visual elements
+var header_bar: PanelContainer
+var divider: ColorRect
+
 var current_region_id: int = -1
 
 
@@ -22,59 +28,141 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# Position at right side of screen
 	anchors_preset = Control.PRESET_CENTER_RIGHT
-	offset_left = -280
-	offset_top = -200
-	offset_right = -10
-	offset_bottom = 200
-	custom_minimum_size = Vector2(260, 0)
+	offset_left = -290
+	offset_top = -220
+	offset_right = -12
+	offset_bottom = 220
+	custom_minimum_size = Vector2(270, 0)
 
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.12, 0.12, 0.18, 0.9)
-	style.set_corner_radius_all(6)
-	style.set_content_margin_all(12)
-	add_theme_stylebox_override("panel", style)
+	# Main panel style
+	var panel_style := UITheme.make_panel_style(
+		UITheme.PANEL_BG,
+		UITheme.PANEL_BORDER,
+		8,   # corner_radius
+		1,   # border_width
+		0,   # margin (we handle padding in inner containers)
+	)
+	add_theme_stylebox_override("panel", panel_style)
+
+	var outer_vbox := VBoxContainer.new()
+	outer_vbox.add_theme_constant_override("separation", 0)
+	add_child(outer_vbox)
+
+	# -- Header bar with region name --
+	header_bar = PanelContainer.new()
+	var header_style := StyleBoxFlat.new()
+	header_style.bg_color = Color(0.12, 0.10, 0.08, 0.6)
+	header_style.set_corner_radius_all(0)
+	header_style.corner_radius_top_left = 7
+	header_style.corner_radius_top_right = 7
+	header_style.set_content_margin_all(10)
+	header_style.content_margin_bottom = 8
+	header_bar.add_theme_stylebox_override("panel", header_style)
+	outer_vbox.add_child(header_bar)
+
+	name_label = Label.new()
+	name_label.text = "Region Name"
+	name_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.style_label_header(name_label, 17)
+	header_bar.add_child(name_label)
+
+	# -- Gold divider line under header --
+	divider = ColorRect.new()
+	divider.color = UITheme.GOLD_DIM
+	divider.custom_minimum_size = Vector2(0, 1)
+	outer_vbox.add_child(divider)
+
+	# -- Body content area --
+	var body := MarginContainer.new()
+	body.add_theme_constant_override("margin_left", 14)
+	body.add_theme_constant_override("margin_right", 14)
+	body.add_theme_constant_override("margin_top", 10)
+	body.add_theme_constant_override("margin_bottom", 12)
+	outer_vbox.add_child(body)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
-	add_child(vbox)
+	vbox.add_theme_constant_override("separation", 4)
+	body.add_child(vbox)
 
-	name_label = _add_label(vbox, "Region Name", 18, Color(0.95, 0.90, 0.70))
-	terrain_label = _add_label(vbox, "Terrain: --")
-	owner_label = _add_label(vbox, "Owner: --")
-	population_label = _add_label(vbox, "Population: --")
+	# -- Identity section --
+	terrain_label = _add_info_row(vbox, "Terrain", "--")
+	owner_label = _add_info_row(vbox, "Owner", "--")
+	population_label = _add_info_row(vbox, "Population", "--")
 
-	# Separator
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
+	# -- Separator --
+	_add_separator(vbox)
 
-	food_label = _add_label(vbox, "Food Yield: --", 14, Color(0.5, 0.85, 0.5))
-	production_label = _add_label(vbox, "Production: --", 14, Color(0.85, 0.65, 0.3))
-	defense_label = _add_label(vbox, "Defense: --", 14, Color(0.6, 0.6, 0.85))
-	infrastructure_label = _add_label(vbox, "Infrastructure: --")
-	resources_label = _add_label(vbox, "")
+	# -- Yields section header --
+	var yields_header := Label.new()
+	yields_header.text = "YIELDS"
+	UITheme.style_label_body(yields_header, 11, UITheme.GOLD_DIM)
+	yields_header.add_theme_constant_override("margin_top", 2)
+	vbox.add_child(yields_header)
 
-	# Close button
-	var close_btn := Button.new()
-	close_btn.text = "Close"
-	close_btn.pressed.connect(_close)
-	vbox.add_child(close_btn)
+	food_label = _add_stat_row(vbox, "Food", "--", UITheme.COLOR_FOOD)
+	production_label = _add_stat_row(vbox, "Production", "--", UITheme.COLOR_PRODUCTION)
+	defense_label = _add_stat_row(vbox, "Defense", "--", Color(0.55, 0.55, 0.78))
+	infrastructure_label = _add_stat_row(vbox, "Infrastructure", "--", UITheme.PARCHMENT_DIM)
+
+	# -- Resources (if any) --
+	_add_separator(vbox)
+	resources_label = Label.new()
+	resources_label.text = ""
+	resources_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+	UITheme.style_label_body(resources_label, 13, UITheme.PARCHMENT_DIM)
+	vbox.add_child(resources_label)
 
 
-func _add_label(
-	parent: Control,
-	text: String,
-	size: int = 14,
-	color: Color = Color(0.85, 0.85, 0.85),
-) -> Label:
-	var lbl := Label.new()
-	lbl.text = text
-	lbl.add_theme_font_size_override("font_size", size)
-	lbl.add_theme_color_override("font_color", color)
-	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD
-	parent.add_child(lbl)
-	return lbl
+func _add_info_row(parent: Control, key: String, value: String) -> Label:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+
+	var key_lbl := Label.new()
+	key_lbl.text = key
+	UITheme.style_label_body(key_lbl, 13, UITheme.PARCHMENT_DIM)
+	key_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(key_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = value
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	UITheme.style_label_stat(val_lbl, 13, UITheme.PARCHMENT)
+	row.add_child(val_lbl)
+
+	return val_lbl
+
+
+func _add_stat_row(parent: Control, key: String, value: String, color: Color) -> Label:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	parent.add_child(row)
+
+	var key_lbl := Label.new()
+	key_lbl.text = key
+	UITheme.style_label_body(key_lbl, 13, UITheme.PARCHMENT_DIM)
+	key_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(key_lbl)
+
+	var val_lbl := Label.new()
+	val_lbl.text = value
+	val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	UITheme.style_label_stat(val_lbl, 14, color)
+	row.add_child(val_lbl)
+
+	return val_lbl
+
+
+func _add_separator(parent: Control) -> void:
+	var sep := ColorRect.new()
+	sep.color = UITheme.PANEL_BORDER
+	sep.custom_minimum_size = Vector2(0, 1)
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_top", 4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	margin.add_child(sep)
+	parent.add_child(margin)
 
 
 func _connect_signals() -> void:
@@ -82,6 +170,12 @@ func _connect_signals() -> void:
 	EventBus.region_deselected.connect(_close)
 	EventBus.turn_ended.connect(_on_turn_ended)
 	EventBus.region_owner_changed.connect(_on_region_owner_changed)
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE and visible:
+		EventBus.region_deselected.emit()
+		get_viewport().set_input_as_handled()
 
 
 func _on_region_selected(region_id: int) -> void:
@@ -106,27 +200,29 @@ func _update_display() -> void:
 		Enums.TerrainType.COASTLINE: "Coastline",
 		Enums.TerrainType.TUNDRA: "Tundra",
 	}
-	terrain_label.text = "Terrain: %s" % terrain_names.get(region.terrain_type, "Unknown")
+	terrain_label.text = terrain_names.get(region.terrain_type, "Unknown")
 
 	if region.owner_id >= 0:
 		var civ := GameState.get_civilization(region.owner_id)
-		owner_label.text = "Owner: %s" % (civ.civ_name if civ else "Unknown")
+		owner_label.text = civ.civ_name if civ else "Unknown"
 	else:
-		owner_label.text = "Owner: Neutral"
+		owner_label.text = "Neutral"
 
-	population_label.text = "Population: %s" % _format_number(region.population)
-	food_label.text = "Food Yield: %d" % region.food_yield
-	production_label.text = "Production: %d" % region.production_yield
-	defense_label.text = "Defense: %.1fx" % region.defense_modifier
-	infrastructure_label.text = "Infrastructure: %d/5" % region.infrastructure_level
+	population_label.text = _format_number(region.population)
+	food_label.text = "%d" % region.food_yield
+	production_label.text = "%d" % region.production_yield
+	defense_label.text = "%.1fx" % region.defense_modifier
+	infrastructure_label.text = "%d / %d" % [region.infrastructure_level, Constants.INFRASTRUCTURE_MAX_LEVEL]
 
 	if region.resource_stock.is_empty():
 		resources_label.text = ""
+		resources_label.visible = false
 	else:
 		var parts: Array[String] = []
 		for res_name in region.resource_stock:
 			parts.append("%s: %d" % [res_name, region.resource_stock[res_name]])
-		resources_label.text = "Resources: %s" % ", ".join(parts)
+		resources_label.text = ", ".join(parts)
+		resources_label.visible = true
 
 
 func _on_turn_ended(_year: int) -> void:

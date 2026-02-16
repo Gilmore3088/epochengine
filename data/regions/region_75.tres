@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/region_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 75
+region_name = "Ancient Grove"
+terrain_type = 4
+population = 900
+owner_id = -1
+food_yield = 3
+production_yield = 1
+defense_modifier = 1.1
+resource_stock = {}
+adjacency_list = Array[int]([73, 74, 77])
+infrastructure_level = 0

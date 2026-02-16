@@ -1,21 +1,21 @@
-[gd_scene load_steps=5 format=3 uid="uid://main_scene"]
+[gd_scene format=3 uid="uid://cqaheqqsgrkl2"]
 
-[ext_resource type="Script" path="res://scripts/world/world_map.gd" id="1"]
-[ext_resource type="Script" path="res://scripts/world/map_camera.gd" id="2"]
-[ext_resource type="Script" path="res://scripts/ui/hud.gd" id="3"]
-[ext_resource type="Script" path="res://scripts/ui/region_panel.gd" id="4"]
+[ext_resource type="Script" uid="uid://e4mhacia0ti8" path="res://scripts/world/world_map.gd" id="1"]
+[ext_resource type="Script" uid="uid://cv5xkp48ybmit" path="res://scripts/world/map_camera.gd" id="2"]
+[ext_resource type="Script" uid="uid://bcsk3ic8aucgg" path="res://scripts/ui/hud.gd" id="3"]
+[ext_resource type="Script" uid="uid://dx4g528h3hasc" path="res://scripts/ui/region_panel.gd" id="4"]
 
-[node name="Main" type="Node2D"]
+[node name="Main" type="Node2D" unique_id=1030213517]
 
-[node name="WorldMap" type="Node2D" parent="."]
+[node name="WorldMap" type="Node2D" parent="." unique_id=1211530900]
 script = ExtResource("1")
 
-[node name="Camera2D" type="Camera2D" parent="."]
-position = Vector2(400, 300)
+[node name="Camera2D" type="Camera2D" parent="." unique_id=1719218813]
+position = Vector2(700, 400)
 script = ExtResource("2")
 
-[node name="HUD" type="CanvasLayer" parent="."]
+[node name="HUD" type="CanvasLayer" parent="." unique_id=207911794]
 script = ExtResource("3")
 
-[node name="RegionPanel" type="PanelContainer" parent="HUD"]
+[node name="RegionPanel" type="PanelContainer" parent="HUD" unique_id=1699759091]
 script = ExtResource("4")

@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/region_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 83
+region_name = "Lighthouse Point"
+terrain_type = 5
+population = 1100
+owner_id = -1
+food_yield = 3
+production_yield = 4
+defense_modifier = 0.8
+resource_stock = {}
+adjacency_list = Array[int]([27, 84, 85])
+infrastructure_level = 0

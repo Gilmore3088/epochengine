@@ -56,6 +56,7 @@ func _zoom_at(mouse_pos: Vector2, factor: float) -> void:
 	var old_zoom := zoom
 	var new_zoom_val := clampf(zoom.x + factor, ZOOM_MIN, ZOOM_MAX)
 	zoom = Vector2(new_zoom_val, new_zoom_val)
+	EventBus.zoom_changed.emit(new_zoom_val)
 
 	# Zoom toward mouse position
 	var viewport_size := get_viewport_rect().size

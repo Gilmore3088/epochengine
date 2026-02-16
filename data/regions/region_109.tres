@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="RegionData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/region_data.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+id = 109
+region_name = "Distant Sands"
+terrain_type = 3
+population = 180
+owner_id = -1
+food_yield = 1
+production_yield = 1
+defense_modifier = 1.0
+resource_stock = {}
+adjacency_list = Array[int]([107, 108, 111])
+infrastructure_level = 0

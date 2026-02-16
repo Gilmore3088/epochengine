@@ -3,31 +3,46 @@ extends RefCounted
 
 ## AI decision-making based on weighted probabilities.
 ## Logic from docs/systems/ai_behavior.md
+## Returns event arrays instead of emitting signals (pure simulation).
 
 
-static func make_decisions(civ: CivilizationData) -> void:
+static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 	## Executes AI decisions for one civilization for this turn.
+	## Returns an array of event dictionaries.
 	if civ.is_collapsed:
-		return
+		return []
 
+	var events: Array[Dictionary] = []
 	var state := civ.get_state()
 
 	match state:
 		Enums.CivState.DECLINING:
-			_try_seek_peace(civ)
+			events.append_array(_try_seek_peace(civ))
 		Enums.CivState.STABLE:
-			_try_expand(civ)
+			events.append_array(_try_expand(civ))
+			events.append_array(_try_declare_war(civ))
+			events.append_array(_try_invest_infrastructure(civ))
 		Enums.CivState.GROWING:
-			_try_expand(civ)
-			_try_declare_war(civ)
+			events.append_array(_try_expand(civ))
+			events.append_array(_try_declare_war(civ))
+			events.append_array(_try_invest_infrastructure(civ))
+
+	return events
 
 
-static func _try_expand(civ: CivilizationData) -> void:
+static func _try_expand(civ: CivilizationData) -> Array[Dictionary]:
 	## Attempt to expand into adjacent neutral regions.
+	## Costs production and moves settlers from existing territory.
 	if civ.stability < Constants.AI_EXPANSION_STABILITY_THRESHOLD:
-		return
+		return []
 	if civ.food_stockpile <= 0:
-		return
+		return []
+
+	var owned_regions := GameState.get_regions_by_owner(civ.id)
+	var region_count := owned_regions.size()
+
+	if not EconomySimulation.can_afford_expansion(civ, region_count):
+		return []
 
 	var targets := GameState.get_adjacent_targets(civ.id)
 	var neutral_targets: Array[RegionData] = []
@@ -36,12 +51,11 @@ static func _try_expand(civ: CivilizationData) -> void:
 			neutral_targets.append(target)
 
 	if neutral_targets.is_empty():
-		return
+		return []
 
 	# Weighted by expansion bias
-	var expand_roll := randf()
-	if expand_roll > civ.expansion_bias:
-		return
+	if randf() > civ.expansion_bias:
+		return []
 
 	# Pick highest food_yield neutral region
 	neutral_targets.sort_custom(func(a: RegionData, b: RegionData) -> bool:
@@ -49,22 +63,38 @@ static func _try_expand(civ: CivilizationData) -> void:
 	)
 
 	var target := neutral_targets[0]
+
+	# Find best source region for settlers (highest population, adjacent to target)
+	var source_region: RegionData = null
+	for region in owned_regions:
+		if target.id in region.adjacency_list:
+			if not source_region or region.population > source_region.population:
+				source_region = region
+	if not source_region:
+		source_region = owned_regions[0]
+
+	# Pay the cost
+	var cost := EconomySimulation.pay_expansion_cost(civ, region_count, source_region)
+
 	var old_owner := target.owner_id
 	target.owner_id = civ.id
-	target.population = maxi(target.population, 200)
+	target.population = maxi(target.population, Constants.EXPANSION_SETTLER_POP)
 
-	EventBus.region_owner_changed.emit(target.id, old_owner, civ.id)
-	EventBus.ai_decision_made.emit(civ.id, "expand", {"region": target.region_name})
-	GameState.log_event("expansion", {
-		"civ": civ.civ_name,
-		"region": target.region_name,
-	})
+	return [{
+		"type": "expansion",
+		"civ_id": civ.id,
+		"civ_name": civ.civ_name,
+		"region_id": target.id,
+		"region_name": target.region_name,
+		"old_owner": old_owner,
+		"cost": cost,
+	}]
 
 
-static func _try_declare_war(civ: CivilizationData) -> void:
+static func _try_declare_war(civ: CivilizationData) -> Array[Dictionary]:
 	## Attempt to declare war on a weaker neighbor.
 	if civ.stability < Constants.WAR_DECLARATION_STABILITY_THRESHOLD:
-		return
+		return []
 
 	var neighbor_ids := GameState.get_neighboring_civs(civ.id)
 	for neighbor_id in neighbor_ids:
@@ -77,32 +107,31 @@ static func _try_declare_war(civ: CivilizationData) -> void:
 		if not neighbor or neighbor.is_collapsed:
 			continue
 
-		# Must be significantly stronger
 		if civ.military_strength < neighbor.military_strength * Constants.WAR_DECLARATION_STRENGTH_RATIO:
 			continue
 
 		var strength_ratio := civ.military_strength / maxf(neighbor.military_strength, 1.0)
-		var war_chance := 0.1 * strength_ratio * civ.aggression_bias * randf()
+		var war_chance := 0.2 * strength_ratio * civ.aggression_bias
 
-		if war_chance > 0.3:
+		if randf() < war_chance:
 			civ.war_targets.append(neighbor_id)
 			neighbor.war_targets.append(civ.id)
 
-			EventBus.war_declared.emit(civ.id, neighbor_id)
-			EventBus.ai_decision_made.emit(civ.id, "declare_war", {
-				"target": neighbor.civ_name,
-			})
-			GameState.log_event("war_declared", {
-				"attacker": civ.civ_name,
-				"defender": neighbor.civ_name,
-			})
-			return  # Only declare one war per turn
+			return [{
+				"type": "war_declared",
+				"attacker_id": civ.id,
+				"defender_id": neighbor_id,
+				"attacker_name": civ.civ_name,
+				"defender_name": neighbor.civ_name,
+			}]
+
+	return []
 
 
-static func _try_seek_peace(civ: CivilizationData) -> void:
+static func _try_seek_peace(civ: CivilizationData) -> Array[Dictionary]:
 	## Attempt to end wars when stability is critically low.
 	if civ.war_targets.is_empty():
-		return
+		return []
 
 	var peace_chance := (1.0 - civ.stability / Constants.STABILITY_MAX) * civ.diplomacy_bias
 	if randf() < peace_chance:
@@ -112,8 +141,37 @@ static func _try_seek_peace(civ: CivilizationData) -> void:
 		civ.war_targets.erase(target_id)
 		if target:
 			target.war_targets.erase(civ.id)
-			EventBus.peace_declared.emit(civ.id, target_id)
-			GameState.log_event("peace", {
-				"civ_a": civ.civ_name,
-				"civ_b": target.civ_name,
-			})
+			return [{
+				"type": "peace",
+				"civ_a_id": civ.id,
+				"civ_b_id": target_id,
+				"civ_a_name": civ.civ_name,
+				"civ_b_name": target.civ_name,
+			}]
+
+	return []
+
+
+static func _try_invest_infrastructure(civ: CivilizationData) -> Array[Dictionary]:
+	## AI invests in infrastructure when surplus is high enough.
+	if civ.production_stockpile < Constants.INFRASTRUCTURE_AUTO_INVEST_THRESHOLD:
+		return []
+
+	var owned_regions := GameState.get_regions_by_owner(civ.id)
+	# Sort by lowest infrastructure (upgrade weakest first)
+	owned_regions.sort_custom(func(a: RegionData, b: RegionData) -> bool:
+		return a.infrastructure_level < b.infrastructure_level
+	)
+
+	for region in owned_regions:
+		if EconomySimulation.try_upgrade_infrastructure(civ, region):
+			return [{
+				"type": "infrastructure_upgrade",
+				"civ_id": civ.id,
+				"civ_name": civ.civ_name,
+				"region_id": region.id,
+				"region_name": region.region_name,
+				"new_level": region.infrastructure_level,
+			}]
+
+	return []

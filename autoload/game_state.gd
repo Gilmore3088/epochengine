@@ -5,6 +5,7 @@ extends Node
 var current_year: int = 0
 var game_speed: Enums.GameSpeed = Enums.GameSpeed.NORMAL
 var is_running: bool = false
+var current_overlay: int = Enums.MapOverlay.POLITICAL
 
 # Core data dictionaries keyed by id
 var regions: Dictionary = {}         # {int: RegionData}
@@ -36,7 +37,7 @@ func _load_regions() -> void:
 	var file_name := dir.get_next()
 	while file_name != "":
 		if file_name.ends_with(".tres"):
-			var region: RegionData = load("res://data/regions/" + file_name)
+			var region: RegionData = load("res://data/regions/" + file_name).duplicate()
 			if region:
 				regions[region.id] = region
 		file_name = dir.get_next()
@@ -53,7 +54,7 @@ func _load_civilizations() -> void:
 	var file_name := dir.get_next()
 	while file_name != "":
 		if file_name.ends_with(".tres"):
-			var civ: CivilizationData = load("res://data/civilizations/" + file_name)
+			var civ: CivilizationData = load("res://data/civilizations/" + file_name).duplicate()
 			if civ:
 				civilizations[civ.id] = civ
 		file_name = dir.get_next()
@@ -106,7 +107,9 @@ func get_adjacent_targets(civ_id: int) -> Array[RegionData]:
 			var neighbor := get_region(neighbor_id)
 			if neighbor and neighbor.owner_id != civ_id:
 				targets[neighbor_id] = neighbor
-	return Array(targets.values(), TYPE_OBJECT, "RefCounted", RegionData)
+	var result: Array[RegionData] = []
+	result.assign(targets.values())
+	return result
 
 
 # --- Civilization Lookups ---
@@ -131,7 +134,9 @@ func get_neighboring_civs(civ_id: int) -> Array[int]:
 			var neighbor := get_region(neighbor_id)
 			if neighbor and neighbor.owner_id >= 0 and neighbor.owner_id != civ_id:
 				neighbor_civ_ids[neighbor.owner_id] = true
-	return Array(neighbor_civ_ids.keys(), TYPE_INT, "", null)
+	var result: Array[int] = []
+	result.assign(neighbor_civ_ids.keys())
+	return result
 
 
 # --- Hero Lookups ---
@@ -170,3 +175,11 @@ func log_event(event_type: String, details: Dictionary = {}) -> void:
 
 func clear_turn_log() -> void:
 	turn_log.clear()
+
+
+# --- Overlay ---
+
+func set_overlay(overlay: int) -> void:
+	if current_overlay != overlay:
+		current_overlay = overlay
+		EventBus.overlay_changed.emit(overlay)

@@ -13,5 +13,5 @@ food_yield = 1
 production_yield = 1
 defense_modifier = 1.0
 resource_stock = {"oil": 50}
-adjacency_list = Array[int]([12, 13, 31])
+adjacency_list = Array[int]([12, 13, 31, 50])
 infrastructure_level = 0

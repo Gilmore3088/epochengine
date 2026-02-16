@@ -91,17 +91,17 @@ static func update_hidden_metrics(
 		total_production += region.production_yield
 
 	# Knowledge grows with population and stability
-	var knowledge_growth := 0.1 * (float(civ.total_population) / 10000.0) * (civ.stability / 100.0)
+	var knowledge_growth := 0.3 * (float(civ.total_population) / 10000.0) * (civ.stability / 100.0)
 	civ.knowledge = clampf(civ.knowledge + knowledge_growth, Constants.TECH_METRIC_MIN, Constants.TECH_METRIC_MAX)
 
 	# Energy grows with production
-	var energy_growth := 0.1 * (float(total_production) / 20.0)
+	var energy_growth := 0.2 * (float(total_production) / 10.0)
 	civ.energy = clampf(civ.energy + energy_growth, Constants.TECH_METRIC_MIN, Constants.TECH_METRIC_MAX)
 
 	# Social coordination grows with stability and population density
 	var region_count := maxf(owned_regions.size(), 1.0)
 	var density := float(civ.total_population) / region_count
-	var social_growth := 0.1 * (civ.stability / 100.0) * clampf(density / 2000.0, 0.1, 2.0)
+	var social_growth := 0.2 * (civ.stability / 100.0) * clampf(density / 2000.0, 0.1, 2.0)
 	if civ.is_in_golden_age():
 		social_growth *= 1.5
 	civ.social_coordination = clampf(
@@ -110,17 +110,17 @@ static func update_hidden_metrics(
 	)
 
 	# Economic surplus grows with stockpiles
-	var surplus_signal := float(civ.food_stockpile + civ.production_stockpile) / 200.0
-	var econ_growth := 0.1 * clampf(surplus_signal, -0.5, 1.0)
+	var surplus_signal := float(civ.food_stockpile + civ.production_stockpile) / 100.0
+	var econ_growth := 0.2 * clampf(surplus_signal, -0.5, 1.0)
 	civ.economic_surplus = clampf(
 		civ.economic_surplus + econ_growth,
 		Constants.TECH_METRIC_MIN, Constants.TECH_METRIC_MAX,
 	)
 
 	# Military pressure grows with wars and army size
-	var war_factor := float(civ.war_targets.size()) * 0.3
-	var army_factor := clampf(civ.military_strength / 500.0, 0.0, 1.0)
-	var mil_growth := 0.1 * (war_factor + army_factor)
+	var war_factor := float(civ.war_targets.size()) * 0.5
+	var army_factor := clampf(civ.military_strength / 300.0, 0.0, 1.0)
+	var mil_growth := 0.2 * (war_factor + army_factor)
 	civ.military_pressure = clampf(
 		civ.military_pressure + mil_growth,
 		Constants.TECH_METRIC_MIN, Constants.TECH_METRIC_MAX,
@@ -157,6 +157,12 @@ static func _pressure_multiplier(civ: CivilizationData, tech: Dictionary) -> flo
 		count += 1
 	if tech["energy"] > 0:
 		overshoot += (civ.energy - tech["energy"]) / tech["energy"]
+		count += 1
+	if tech["social"] > 0:
+		overshoot += (civ.social_coordination - tech["social"]) / tech["social"]
+		count += 1
+	if tech["economic"] > 0:
+		overshoot += (civ.economic_surplus - tech["economic"]) / tech["economic"]
 		count += 1
 	if tech["military"] > 0:
 		overshoot += (civ.military_pressure - tech["military"]) / tech["military"]

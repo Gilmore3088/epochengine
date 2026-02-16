@@ -39,8 +39,9 @@ static func apply_battle_result(
 	attacker_civ: CivilizationData,
 	defender_civ: CivilizationData,
 	contested_region: RegionData,
-) -> void:
+) -> Dictionary:
 	## Applies the battle result: transfers region, applies stability loss.
+	## Returns event data (no signals emitted - caller handles that).
 	var winner_id: int = result["winner_id"]
 	var loser_id: int = result["loser_id"]
 
@@ -67,23 +68,21 @@ static func apply_battle_result(
 	)
 
 	# Military attrition for both sides
-	var intensity := (result["attacker_strength"] + result["defender_strength"]) / 2.0
-	var attrition_ratio := clampf(intensity / 1000.0, 0.05, 0.20)
+	var intensity: float = (result["attacker_strength"] + result["defender_strength"]) / 2.0
+	var attrition_ratio: float = clampf(intensity / 1000.0, 0.05, 0.20)
 	attacker_civ.military_strength *= (1.0 - attrition_ratio)
 	defender_civ.military_strength *= (1.0 - attrition_ratio * 0.7)
 
-	# Emit signals
-	EventBus.region_owner_changed.emit(contested_region.id, old_owner, winner_id)
-	EventBus.battle_resolved.emit(
-		contested_region.id, attacker_civ.id, defender_civ.id, winner_id
-	)
-
-	GameState.log_event("battle", {
-		"region": contested_region.region_name,
-		"attacker": attacker_civ.civ_name,
-		"defender": defender_civ.civ_name,
-		"winner": "attacker" if winner_id == attacker_civ.id else "defender",
-	})
+	return {
+		"region_id": contested_region.id,
+		"old_owner": old_owner,
+		"winner_id": winner_id,
+		"attacker_id": attacker_civ.id,
+		"defender_id": defender_civ.id,
+		"region_name": contested_region.region_name,
+		"attacker_name": attacker_civ.civ_name,
+		"defender_name": defender_civ.civ_name,
+	}
 
 
 static func _calculate_strength(
