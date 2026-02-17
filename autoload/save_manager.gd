@@ -87,6 +87,14 @@ func _create_save_data() -> Resource:
 			"resource_stock": region.resource_stock,
 			"adjacency_list": region.adjacency_list,
 			"infrastructure_level": region.infrastructure_level,
+			"development_tier": region.development_tier,
+			"demotion_years": region.demotion_years,
+			"size_factor": region.size_factor,
+			"urbanization_level": region.urbanization_level,
+			"town_count": region.town_count,
+			"supply_value": region.supply_value,
+			"resource_deposits": region.resource_deposits,
+			"extraction_years": region.extraction_years,
 		})
 	save.set_meta("regions", region_list)
 
@@ -106,6 +114,9 @@ func _create_save_data() -> Resource:
 			"hero_ids": civ.hero_ids,
 			"is_collapsed": civ.is_collapsed,
 			"is_player": civ.is_player,
+			"governance_tier": civ.governance_tier,
+			"governance_years": civ.governance_years,
+			"current_era": civ.current_era,
 			"golden_age_years_remaining": civ.golden_age_years_remaining,
 			"golden_age_cooldown": civ.golden_age_cooldown,
 			"knowledge": civ.knowledge,
@@ -118,9 +129,13 @@ func _create_save_data() -> Resource:
 			"diplomacy_bias": civ.diplomacy_bias,
 			"economy_bias": civ.economy_bias,
 			"war_targets": civ.war_targets,
+			"war_durations": civ.war_durations,
+			"peace_cooldowns": civ.peace_cooldowns,
 			"alliance_partners": civ.alliance_partners,
 			"consecutive_low_stability_years": civ.consecutive_low_stability_years,
 			"technologies": civ.technologies,
+			"resource_stockpiles": civ.resource_stockpiles,
+			"resource_production_log": civ.resource_production_log,
 		})
 	save.set_meta("civilizations", civ_list)
 
@@ -162,6 +177,14 @@ func _restore_save_data(save: Resource) -> void:
 		region.resource_stock = data["resource_stock"]
 		region.adjacency_list = data["adjacency_list"]
 		region.infrastructure_level = data["infrastructure_level"]
+		region.development_tier = data.get("development_tier", 0)
+		region.demotion_years = data.get("demotion_years", 0)
+		region.size_factor = data.get("size_factor", 1.0)
+		region.urbanization_level = data.get("urbanization_level", 0.0)
+		region.town_count = data.get("town_count", 0)
+		region.supply_value = data.get("supply_value", 1.0)
+		region.resource_deposits = data.get("resource_deposits", {})
+		region.extraction_years = data.get("extraction_years", 0)
 		GameState.regions[region.id] = region
 
 	# Restore civilizations
@@ -180,6 +203,9 @@ func _restore_save_data(save: Resource) -> void:
 		civ.hero_ids = data["hero_ids"]
 		civ.is_collapsed = data["is_collapsed"]
 		civ.is_player = data.get("is_player", false)
+		civ.governance_tier = data.get("governance_tier", Enums.GovernanceTier.TRIBAL)
+		civ.governance_years = data.get("governance_years", 0)
+		civ.current_era = data.get("current_era", Enums.Epoch.PREHISTORIC)
 		civ.golden_age_years_remaining = data["golden_age_years_remaining"]
 		civ.golden_age_cooldown = data["golden_age_cooldown"]
 		civ.knowledge = data["knowledge"]
@@ -192,9 +218,13 @@ func _restore_save_data(save: Resource) -> void:
 		civ.diplomacy_bias = data["diplomacy_bias"]
 		civ.economy_bias = data["economy_bias"]
 		civ.war_targets = data["war_targets"]
+		civ.war_durations = data.get("war_durations", {})
+		civ.peace_cooldowns = data.get("peace_cooldowns", {})
 		civ.alliance_partners = data["alliance_partners"]
 		civ.consecutive_low_stability_years = data["consecutive_low_stability_years"]
 		civ.technologies = data["technologies"]
+		civ.resource_stockpiles = data.get("resource_stockpiles", {})
+		civ.resource_production_log = data.get("resource_production_log", {})
 		GameState.civilizations[civ.id] = civ
 
 	# Restore heroes

@@ -16,6 +16,9 @@ static func calculate_food_production(
 		# Scale by region size (larger regions produce more)
 		food = int(food * region.size_factor)
 
+		# Development tier multiplier (sub-linear scaling on base yields)
+		food = int(float(food) * DevelopmentTierSimulation.get_economy_multiplier(region.development_tier))
+
 		# Golden age bonus
 		if civ.is_in_golden_age():
 			food = int(food * (1.0 + Constants.GOLDEN_AGE_FOOD_BONUS))
@@ -34,6 +37,9 @@ static func calculate_production_output(
 
 		# Scale by region size (larger regions produce more)
 		prod = int(prod * region.size_factor)
+
+		# Development tier multiplier (sub-linear scaling on base yields)
+		prod = int(float(prod) * DevelopmentTierSimulation.get_economy_multiplier(region.development_tier))
 
 		# Visionary hero bonus
 		var hero_bonus := 1.0
@@ -81,10 +87,19 @@ static func process_economy(civ: CivilizationData, owned_regions: Array[RegionDa
 	civ.production_stockpile += prod_net
 
 	# Military replenishment from remaining production surplus
+	# Infrastructure boosts reinforcement rate
+	var avg_infra := 0.0
+	if not owned_regions.is_empty():
+		var infra_total := 0
+		for region in owned_regions:
+			infra_total += region.infrastructure_level
+		avg_infra = float(infra_total) / float(owned_regions.size())
+	var infra_reinforce_mod := 1.0 + avg_infra * Constants.INFRA_MILITARY_REINFORCE_BONUS
+
 	var reinforcement := 0.0
 	if civ.production_stockpile > 0:
 		reinforcement = minf(
-			float(civ.production_stockpile) * Constants.MILITARY_REINFORCE_RATE,
+			float(civ.production_stockpile) * Constants.MILITARY_REINFORCE_RATE * infra_reinforce_mod,
 			Constants.MILITARY_REINFORCE_MAX,
 		)
 		civ.military_strength += reinforcement

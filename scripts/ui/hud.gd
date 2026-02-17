@@ -14,8 +14,15 @@ var advance_button: Button
 var speed_5x_button: Button
 var speed_10x_button: Button
 var speed_label: Label
+var era_label: Label
+var governance_label: Label
+var regions_label: Label
 var zoom_in_btn: Button
 var zoom_out_btn: Button
+
+# --- Resource bar elements ---
+var resource_bar_bg: Panel
+var resource_labels: Dictionary = {}  # {resource_type_int: Label}
 
 # --- Overlay buttons ---
 var overlay_buttons: Dictionary = {}
@@ -53,6 +60,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	_build_top_bar()
+	_build_resource_bar()
 	_build_overlay_strip()
 	_build_event_log()
 	_build_summary_modal()
@@ -139,6 +147,28 @@ func _build_top_bar() -> void:
 
 	_add_separator(top_bar)
 
+	# --- Empire info group ---
+	var empire_group := HBoxContainer.new()
+	empire_group.add_theme_constant_override("separation", 12)
+	top_bar.add_child(empire_group)
+
+	era_label = Label.new()
+	era_label.text = "Prehistoric"
+	UITheme.style_label_stat(era_label, 14, Color(0.65, 0.55, 0.85))
+	empire_group.add_child(era_label)
+
+	governance_label = Label.new()
+	governance_label.text = "Tribal"
+	UITheme.style_label_stat(governance_label, 14, Color(0.55, 0.75, 0.65))
+	empire_group.add_child(governance_label)
+
+	regions_label = Label.new()
+	regions_label.text = "0 regions"
+	UITheme.style_label_stat(regions_label, 14, UITheme.PARCHMENT_DIM)
+	empire_group.add_child(regions_label)
+
+	_add_separator(top_bar)
+
 	# --- Time group ---
 	var time_group := HBoxContainer.new()
 	time_group.add_theme_constant_override("separation", 6)
@@ -204,14 +234,88 @@ func _add_separator(parent: Control) -> void:
 	parent.add_child(sep)
 
 
+# ==================== RESOURCE BAR ====================
+
+func _build_resource_bar() -> void:
+	resource_bar_bg = Panel.new()
+	resource_bar_bg.anchors_preset = Control.PRESET_TOP_WIDE
+	resource_bar_bg.offset_top = 52
+	resource_bar_bg.offset_bottom = 78
+	var bg_style := UITheme.make_panel_style(
+		Color(0.05, 0.04, 0.07, 0.85),
+		Color(0.25, 0.22, 0.16, 0.3),
+		0, 0, 0
+	)
+	bg_style.border_width_bottom = 1
+	bg_style.border_color = Color(0.25, 0.22, 0.16, 0.25)
+	resource_bar_bg.add_theme_stylebox_override("panel", bg_style)
+	resource_bar_bg.visible = false
+	add_child(resource_bar_bg)
+
+	var bar := HBoxContainer.new()
+	bar.offset_left = 16
+	bar.offset_top = 55
+	bar.offset_right = -16
+	bar.add_theme_constant_override("separation", 14)
+	add_child(bar)
+
+	var title := Label.new()
+	title.text = "Resources:"
+	UITheme.style_label_body(title, 12, UITheme.GOLD_DIM)
+	bar.add_child(title)
+
+	# Create a label for each resource type (hidden until unlocked)
+	for res_type in range(9):
+		var lbl := Label.new()
+		lbl.text = ""
+		lbl.visible = false
+		UITheme.style_label_stat(lbl, 12, UITheme.PARCHMENT_DIM)
+		bar.add_child(lbl)
+		resource_labels[res_type] = lbl
+
+
+func _update_resource_bar() -> void:
+	var civ := GameState.get_civilization(player_civ_id)
+	if not civ:
+		resource_bar_bg.visible = false
+		return
+
+	var has_any := false
+	for res_type in range(9):
+		var lbl: Label = resource_labels[res_type]
+		if not ResourceProduction.is_resource_unlocked(res_type, civ.current_era):
+			lbl.visible = false
+			continue
+
+		var stockpile: int = civ.resource_stockpiles.get(res_type, 0)
+		var production: int = civ.resource_production_log.get(res_type, 0)
+		var res_name: String = ResourceProduction.get_resource_name(res_type)
+
+		# Color: green if producing, yellow if low, red if zero
+		var color: Color
+		if stockpile <= 0 and production <= 0:
+			color = Color(0.82, 0.32, 0.30)  # red
+		elif stockpile < 5:
+			color = Color(0.82, 0.72, 0.28)  # yellow
+		else:
+			color = Color(0.45, 0.78, 0.42)  # green
+
+		lbl.text = "%s: %d (+%d)" % [res_name, stockpile, production]
+		lbl.add_theme_color_override("font_color", color)
+		lbl.visible = true
+		has_any = true
+
+	resource_bar_bg.visible = has_any
+
+
 # ==================== OVERLAY STRIP ====================
 
 func _build_overlay_strip() -> void:
 	var strip_bg := Panel.new()
 	strip_bg.offset_left = 10
-	strip_bg.offset_top = 54
+	strip_bg.offset_top = 80
 	strip_bg.offset_right = 400
-	strip_bg.offset_bottom = 82
+	strip_bg.offset_bottom = 108
 	var strip_style := UITheme.make_panel_style(
 		Color(0.06, 0.05, 0.08, 0.75),
 		Color(0.25, 0.22, 0.16, 0.25),
@@ -222,7 +326,7 @@ func _build_overlay_strip() -> void:
 
 	var strip := HBoxContainer.new()
 	strip.offset_left = 14
-	strip.offset_top = 56
+	strip.offset_top = 82
 	strip.add_theme_constant_override("separation", 2)
 	add_child(strip)
 
@@ -253,6 +357,24 @@ func _on_overlay_pressed(mode: int) -> void:
 	for m in overlay_buttons:
 		overlay_buttons[m].button_pressed = (m == mode)
 	GameState.set_overlay(mode)
+
+
+const OVERLAY_CYCLE_ORDER: Array[int] = [
+	Enums.MapOverlay.POLITICAL,
+	Enums.MapOverlay.TERRAIN,
+	Enums.MapOverlay.RESOURCES,
+	Enums.MapOverlay.SUPPLY_LINES,
+	Enums.MapOverlay.ALLIANCES,
+]
+
+
+func _cycle_overlay() -> void:
+	## Cycle to the next map overlay mode (Tab key).
+	var current := GameState.current_overlay
+	var idx := OVERLAY_CYCLE_ORDER.find(current)
+	var next_idx := (idx + 1) % OVERLAY_CYCLE_ORDER.size()
+	var next_mode := OVERLAY_CYCLE_ORDER[next_idx]
+	_on_overlay_pressed(next_mode)
 
 
 # ==================== EVENT LOG ====================
@@ -473,6 +595,9 @@ func _connect_signals() -> void:
 	EventBus.ai_decision_made.connect(_on_ai_decision)
 	EventBus.infrastructure_upgraded.connect(_on_infrastructure_upgraded)
 	EventBus.peace_declared.connect(_on_peace_declared)
+	EventBus.development_tier_changed.connect(_on_dev_tier_changed)
+	EventBus.resource_deposit_depleted.connect(_on_deposit_depleted)
+	EventBus.resource_maintenance_failure.connect(_on_maintenance_failure)
 
 
 func _update_display() -> void:
@@ -487,6 +612,15 @@ func _update_display() -> void:
 	food_label.text = "Food: %d" % civ.food_stockpile
 	production_label.text = "Prod: %d" % civ.production_stockpile
 	military_label.text = "Army: %.0f" % civ.military_strength
+
+	# Era and governance
+	var era_names := ["Prehistoric", "Classical", "Industrial", "Future"]
+	era_label.text = era_names[clampi(civ.current_era, 0, 3)]
+	governance_label.text = GovernanceSimulation.get_tier_name(civ.governance_tier)
+	regions_label.text = "%d regions" % GameState.get_regions_by_owner(civ.id).size()
+
+	# Resource bar
+	_update_resource_bar()
 
 
 func _update_stability_color(value: float) -> void:
@@ -510,6 +644,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		_start_fast_forward(5)
 	elif event.is_action_pressed("speed_fastest"):
 		_start_fast_forward(10)
+	elif event.is_action_pressed("cycle_overlay"):
+		_cycle_overlay()
 	if event is InputEventKey and event.pressed and summary_bg.visible:
 		if event.keycode == KEY_ESCAPE or event.keycode == KEY_ENTER:
 			_dismiss_summary()
@@ -704,3 +840,23 @@ func _on_peace_declared(civ_a_id: int, civ_b_id: int) -> void:
 	var b := GameState.get_civilization(civ_b_id)
 	if a and b:
 		_log("[color=#8b8]%s and %s declare peace[/color]" % [a.civ_name, b.civ_name])
+
+
+func _on_dev_tier_changed(region_id: int, civ_id: int, old_tier: String, new_tier: String) -> void:
+	var region := GameState.get_region(region_id)
+	var civ := GameState.get_civilization(civ_id)
+	if region and civ:
+		_log("[color=#a8d]%s: %s -> %s[/color]" % [region.region_name, old_tier, new_tier])
+
+
+func _on_deposit_depleted(region_id: int, _civ_id: int, resource_name: String) -> void:
+	var region := GameState.get_region(region_id)
+	if region:
+		_log("[color=#e85]%s deposits depleted in %s[/color]" % [resource_name, region.region_name])
+
+
+func _on_maintenance_failure(civ_id: int, resource_name: String, missing_inputs: int) -> void:
+	if civ_id == player_civ_id:
+		_log("[color=#da5]Maintenance failure: %s (missing %d input%s)[/color]" % [
+			resource_name, missing_inputs, "s" if missing_inputs > 1 else ""
+		])

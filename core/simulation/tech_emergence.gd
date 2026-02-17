@@ -59,6 +59,17 @@ const TECH_TABLE: Array[Dictionary] = [
 ]
 
 
+static func compute_era(tech_count: int) -> Enums.Epoch:
+	## Derive the civilization's era from the number of discovered technologies.
+	if tech_count >= Constants.ERA_TECH_THRESHOLDS[3]:
+		return Enums.Epoch.FUTURE
+	if tech_count >= Constants.ERA_TECH_THRESHOLDS[2]:
+		return Enums.Epoch.INDUSTRIAL
+	if tech_count >= Constants.ERA_TECH_THRESHOLDS[1]:
+		return Enums.Epoch.CLASSICAL
+	return Enums.Epoch.PREHISTORIC
+
+
 static func check_emergence(civ: CivilizationData) -> Array[String]:
 	## Check all techs and return names of any that emerge this year.
 	var emerged: Array[String] = []
@@ -71,7 +82,7 @@ static func check_emergence(civ: CivilizationData) -> Array[String]:
 			var probability: float = tech["base_probability"]
 			# Pressure multiplier: higher metrics increase chance
 			var pressure := _pressure_multiplier(civ, tech)
-			var roll := randf()
+			var roll := GameState.sim_rng.randf()
 
 			if roll < probability * pressure:
 				emerged.append(tech["name"])

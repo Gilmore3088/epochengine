@@ -2,24 +2,25 @@ class_name RegionVisual
 extends Node2D
 
 ## Visual representation of a single map region.
-## CK2/EU4 political map style with terrain decorations, overlay modes,
-## and selection feedback.
+## Layered scene graph: base terrain -> political tint -> decorations -> UI.
+## Supports both textured mode (seamless PNGs) and fallback mode (flat colors).
 
 var region_data: RegionData
 var polygon: Polygon2D
-var collision: CollisionPolygon2D
-var label: Label
+var tint_overlay: Polygon2D
+var terrain_deco: Node2D
 var area: Area2D
 var select_outline: Line2D
 var select_marker: Polygon2D
-var terrain_deco: Node2D
+var label: Label
 
 var is_hovered: bool = false
 var is_selected: bool = false
 var current_zoom: float = 1.0
+var _has_texture: bool = false
 var _local_points: PackedVector2Array
 
-# Muted terrain tint colors (blended under political color)
+# Muted terrain tint colors (blended under political color in fallback mode)
 const TERRAIN_TINTS := {
 	Enums.TerrainType.RIVER_BASIN: Color(0.32, 0.48, 0.28),
 	Enums.TerrainType.PLAINS: Color(0.52, 0.52, 0.34),
@@ -28,9 +29,11 @@ const TERRAIN_TINTS := {
 	Enums.TerrainType.JUNGLE: Color(0.22, 0.38, 0.20),
 	Enums.TerrainType.COASTLINE: Color(0.35, 0.45, 0.50),
 	Enums.TerrainType.TUNDRA: Color(0.52, 0.55, 0.58),
+	Enums.TerrainType.STEPPE: Color(0.55, 0.50, 0.35),
+	Enums.TerrainType.VOLCANIC_RIDGE: Color(0.38, 0.30, 0.28),
 }
 
-# Pure terrain colors (for terrain overlay)
+# Pure terrain colors (for terrain overlay in fallback mode)
 const TERRAIN_COLORS := {
 	Enums.TerrainType.RIVER_BASIN: Color(0.30, 0.55, 0.25),
 	Enums.TerrainType.PLAINS: Color(0.60, 0.62, 0.38),
@@ -39,6 +42,8 @@ const TERRAIN_COLORS := {
 	Enums.TerrainType.JUNGLE: Color(0.18, 0.42, 0.18),
 	Enums.TerrainType.COASTLINE: Color(0.38, 0.52, 0.58),
 	Enums.TerrainType.TUNDRA: Color(0.60, 0.65, 0.68),
+	Enums.TerrainType.STEPPE: Color(0.65, 0.60, 0.40),
+	Enums.TerrainType.VOLCANIC_RIDGE: Color(0.45, 0.35, 0.30),
 }
 
 const NEUTRAL_BASE := Color(0.60, 0.56, 0.46)
@@ -52,30 +57,41 @@ const SELECT_OUTLINE_WIDTH := 2.5
 const SELECT_MARKER_COLOR := Color(1.0, 0.90, 0.45, 0.95)
 const SELECT_MARKER_SIZE := 5.0
 
-# Terrain decoration colors (subtle, semi-transparent)
-const DECO_COLOR_MOUNTAIN := Color(0.25, 0.22, 0.18, 0.30)
-const DECO_COLOR_RIVER := Color(0.20, 0.35, 0.50, 0.25)
-const DECO_COLOR_JUNGLE := Color(0.12, 0.25, 0.10, 0.28)
-const DECO_COLOR_DESERT := Color(0.50, 0.42, 0.25, 0.18)
-const DECO_COLOR_COAST := Color(0.25, 0.38, 0.50, 0.22)
-const DECO_COLOR_TUNDRA := Color(0.55, 0.58, 0.62, 0.20)
+# Dim base color for heatmap overlays when textured
+const HEATMAP_BASE_DIM := Color(0.7, 0.7, 0.7)
 
 
 func initialize(data: RegionData, points: PackedVector2Array) -> void:
 	region_data = data
 	_local_points = points
 
-	# Polygon2D fill
+	# Base terrain polygon (z=0)
 	polygon = Polygon2D.new()
 	polygon.polygon = points
 	polygon.antialiased = true
 	add_child(polygon)
 
-	# Terrain decoration layer
+	# Political/data tint overlay (z=1)
+	tint_overlay = Polygon2D.new()
+	tint_overlay.polygon = points
+	tint_overlay.z_index = 1
+	tint_overlay.visible = false
+	add_child(tint_overlay)
+
+	# Try to apply terrain texture; cache result
+	_has_texture = _apply_terrain_texture(points)
+
+	var centroid := _calculate_centroid(points)
+
+	# Terrain decoration layer - fallback when no texture (z=2)
 	terrain_deco = Node2D.new()
-	terrain_deco.z_index = 1
+	terrain_deco.z_index = 2
+	terrain_deco.visible = not _has_texture
 	add_child(terrain_deco)
-	_build_terrain_decorations(points)
+	if not _has_texture:
+		TerrainDecorations.build(
+			region_data.terrain_type, centroid, region_data.id, terrain_deco
+		)
 
 	# Area2D for mouse detection
 	area = Area2D.new()
@@ -103,7 +119,6 @@ func initialize(data: RegionData, points: PackedVector2Array) -> void:
 	add_child(select_outline)
 
 	# Selection pin marker (small diamond at centroid)
-	var centroid := _calculate_centroid(points)
 	select_marker = Polygon2D.new()
 	select_marker.polygon = PackedVector2Array([
 		centroid + Vector2(0, -SELECT_MARKER_SIZE),
@@ -138,167 +153,71 @@ func initialize(data: RegionData, points: PackedVector2Array) -> void:
 	update_appearance()
 
 
-# --- Terrain Decorations ---
+# --- Terrain Textures ---
 
-func _build_terrain_decorations(points: PackedVector2Array) -> void:
-	## Draw terrain-specific visual markers inside the polygon.
-	var centroid := _calculate_centroid(points)
+func _apply_terrain_texture(points: PackedVector2Array) -> bool:
+	## Apply a tiling terrain texture to this region's polygon.
+	## Returns true if a texture was applied, false to fall back to procedural.
+	var tex_path: String = Constants.TERRAIN_TEXTURE_PATHS.get(
+		region_data.terrain_type, ""
+	)
+	if tex_path.is_empty():
+		return false
+
+	var tex: Texture2D = load(tex_path)
+	if not tex:
+		return false
+
+	polygon.texture = tex
+	polygon.texture_repeat = CanvasItem.TEXTURE_REPEAT_ENABLED
+	polygon.color = Color.WHITE
+	polygon.uv = _compute_world_space_uv(points, tex.get_size())
+	return true
+
+
+func _compute_world_space_uv(
+	points: PackedVector2Array, tex_size: Vector2,
+) -> PackedVector2Array:
+	## Compute world-space UVs with per-region rotation and offset.
+	## Converts local polygon points to global, applies rotation, then tiles.
 	var rng := RandomNumberGenerator.new()
-	rng.seed = region_data.id * 7919  # Deterministic per region
+	rng.seed = region_data.id * 5381
 
-	match region_data.terrain_type:
-		Enums.TerrainType.MOUNTAINS:
-			_draw_mountain_peaks(centroid, rng)
-		Enums.TerrainType.RIVER_BASIN:
-			_draw_river_lines(centroid, rng)
-		Enums.TerrainType.JUNGLE:
-			_draw_jungle_dots(centroid, rng)
-		Enums.TerrainType.DESERT:
-			_draw_desert_stipple(centroid, rng)
-		Enums.TerrainType.COASTLINE:
-			_draw_coast_waves(centroid, rng)
-		Enums.TerrainType.TUNDRA:
-			_draw_tundra_marks(centroid, rng)
-		Enums.TerrainType.PLAINS:
-			_draw_plains_grass(centroid, rng)
+	# Random UV offset to break wallpaper repetition
+	var uv_offset := Vector2(
+		rng.randf_range(0.0, tex_size.x),
+		rng.randf_range(0.0, tex_size.y),
+	)
 
+	# Random 90-degree rotation
+	var rotation_idx: int = rng.randi_range(0, 3)
+	var angle: float = Constants.UV_ROTATIONS[rotation_idx]
+	var cos_a := cos(angle)
+	var sin_a := sin(angle)
 
-func _draw_mountain_peaks(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Small triangle peaks scattered across the region.
-	for i in 5:
-		var offset := Vector2(
-			rng.randf_range(-35, 35), rng.randf_range(-25, 25)
+	# Per-terrain tile scale override, falling back to global default
+	var override_scale: float = Constants.TERRAIN_TILE_SCALE_OVERRIDE.get(
+		region_data.terrain_type, 0.0
+	)
+	var tile_scale: float = override_scale if override_scale > 0.0 else Constants.TERRAIN_TILE_SCALE
+
+	var uv := PackedVector2Array()
+	for local_p in points:
+		# Convert to global coordinates
+		var global_p: Vector2 = position + local_p
+
+		# Apply rotation around origin
+		var rotated_p := Vector2(
+			global_p.x * cos_a - global_p.y * sin_a,
+			global_p.x * sin_a + global_p.y * cos_a,
 		)
-		var base := centroid + offset
-		var peak_h := rng.randf_range(6, 14)
-		var peak_w := rng.randf_range(5, 9)
 
-		var peak := Polygon2D.new()
-		peak.polygon = PackedVector2Array([
-			base + Vector2(0, -peak_h),
-			base + Vector2(-peak_w, 0),
-			base + Vector2(peak_w, 0),
-		])
-		peak.color = DECO_COLOR_MOUNTAIN
-		terrain_deco.add_child(peak)
-
-		# Snow cap on taller peaks
-		if peak_h > 10:
-			var cap := Polygon2D.new()
-			var cap_h := peak_h * 0.35
-			var cap_w := peak_w * 0.4
-			cap.polygon = PackedVector2Array([
-				base + Vector2(0, -peak_h),
-				base + Vector2(-cap_w, -peak_h + cap_h),
-				base + Vector2(cap_w, -peak_h + cap_h),
-			])
-			cap.color = Color(0.85, 0.85, 0.90, 0.25)
-			terrain_deco.add_child(cap)
-
-
-func _draw_river_lines(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Wavy horizontal lines representing river/fertile land.
-	for i in 3:
-		var y_off := rng.randf_range(-20, 20)
-		var line := Line2D.new()
-		var pts := PackedVector2Array()
-		for x in range(-30, 31, 8):
-			var wave := sin(float(x) * 0.15 + float(i)) * 4.0
-			pts.append(centroid + Vector2(x, y_off + wave))
-		line.points = pts
-		line.width = 1.5
-		line.default_color = DECO_COLOR_RIVER
-		line.antialiased = true
-		terrain_deco.add_child(line)
-
-
-func _draw_jungle_dots(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Small tree-like circles scattered across the region.
-	for i in 8:
-		var offset := Vector2(
-			rng.randf_range(-30, 30), rng.randf_range(-22, 22)
-		)
-		var pos := centroid + offset
-		var r := rng.randf_range(2.5, 5.0)
-
-		# Tree canopy (small filled circle approximated with polygon)
-		var circle := Polygon2D.new()
-		var circle_pts := PackedVector2Array()
-		for j in 8:
-			var angle := float(j) * TAU / 8.0
-			circle_pts.append(pos + Vector2(cos(angle), sin(angle)) * r)
-		circle.polygon = circle_pts
-		circle.color = DECO_COLOR_JUNGLE
-		terrain_deco.add_child(circle)
-
-
-func _draw_desert_stipple(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Scattered dots representing sand/arid terrain.
-	for i in 12:
-		var offset := Vector2(
-			rng.randf_range(-32, 32), rng.randf_range(-24, 24)
-		)
-		var pos := centroid + offset
-		var dot := Polygon2D.new()
-		var dot_pts := PackedVector2Array()
-		for j in 6:
-			var angle := float(j) * TAU / 6.0
-			dot_pts.append(pos + Vector2(cos(angle), sin(angle)) * 1.5)
-		dot.polygon = dot_pts
-		dot.color = DECO_COLOR_DESERT
-		terrain_deco.add_child(dot)
-
-
-func _draw_coast_waves(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Small wave arcs near the region edge.
-	for i in 3:
-		var y_off := rng.randf_range(-18, 18)
-		var x_start := rng.randf_range(-25, -5)
-		var line := Line2D.new()
-		var pts := PackedVector2Array()
-		for x in range(0, 20, 3):
-			var wave := sin(float(x) * 0.3) * 3.0
-			pts.append(centroid + Vector2(x_start + x, y_off + wave))
-		line.points = pts
-		line.width = 1.2
-		line.default_color = DECO_COLOR_COAST
-		line.antialiased = true
-		terrain_deco.add_child(line)
-
-
-func _draw_tundra_marks(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Small asterisk/snowflake marks.
-	for i in 5:
-		var offset := Vector2(
-			rng.randf_range(-28, 28), rng.randf_range(-20, 20)
-		)
-		var pos := centroid + offset
-		for j in 3:
-			var angle := float(j) * PI / 3.0
-			var line := Line2D.new()
-			var d := Vector2(cos(angle), sin(angle)) * 3.0
-			line.points = PackedVector2Array([pos - d, pos + d])
-			line.width = 1.0
-			line.default_color = DECO_COLOR_TUNDRA
-			terrain_deco.add_child(line)
-
-
-func _draw_plains_grass(centroid: Vector2, rng: RandomNumberGenerator) -> void:
-	## Small grass blade marks.
-	for i in 6:
-		var offset := Vector2(
-			rng.randf_range(-30, 30), rng.randf_range(-22, 22)
-		)
-		var base := centroid + offset
-		var line := Line2D.new()
-		var lean := rng.randf_range(-2, 2)
-		line.points = PackedVector2Array([
-			base,
-			base + Vector2(lean, -rng.randf_range(4, 8)),
-		])
-		line.width = 1.0
-		line.default_color = Color(0.35, 0.42, 0.25, 0.20)
-		terrain_deco.add_child(line)
+		# Scale to UV space and add offset
+		uv.append(Vector2(
+			(rotated_p.x + uv_offset.x) / tile_scale,
+			(rotated_p.y + uv_offset.y) / tile_scale,
+		))
+	return uv
 
 
 # --- Appearance ---
@@ -321,24 +240,36 @@ func update_appearance() -> void:
 		_:
 			_render_political()
 
-	if is_selected:
-		polygon.color = polygon.color.lightened(SELECT_LIGHTEN)
-	elif is_hovered:
-		polygon.color = polygon.color.lightened(HOVER_LIGHTEN)
+	_apply_interaction_feedback()
 
 	if select_outline:
 		select_outline.visible = is_selected
 	if select_marker:
 		select_marker.visible = is_selected
 
-	# Show/hide terrain decorations based on overlay
+	# Terrain decorations: visible in political/terrain when no texture
 	if terrain_deco:
-		terrain_deco.visible = (
+		var overlay_shows_deco := (
 			GameState.current_overlay == Enums.MapOverlay.POLITICAL
 			or GameState.current_overlay == Enums.MapOverlay.TERRAIN
 		)
+		terrain_deco.visible = overlay_shows_deco and not _has_texture
 
 	_update_label_style()
+
+
+func _apply_interaction_feedback() -> void:
+	## Apply hover/selection visual feedback.
+	## Textured mode: lighten tint_overlay. Fallback mode: lighten polygon.color.
+	if not is_selected and not is_hovered:
+		return
+
+	var delta := SELECT_LIGHTEN if is_selected else HOVER_LIGHTEN
+
+	if _has_texture and tint_overlay.visible:
+		tint_overlay.color = tint_overlay.color.lightened(delta)
+	else:
+		polygon.color = polygon.color.lightened(delta)
 
 
 # --- Overlay Renderers ---
@@ -347,57 +278,111 @@ func _render_political() -> void:
 	var terrain_tint: Color = TERRAIN_TINTS.get(
 		region_data.terrain_type, Color(0.45, 0.45, 0.40)
 	)
-	if region_data.owner_id >= 0:
-		var civ: CivilizationData = GameState.get_civilization(region_data.owner_id)
-		if civ:
-			# Add subtle per-region variation so provinces don't look identical
-			var variation := _region_color_variation()
-			var base_color := civ.color.lerp(terrain_tint, TERRAIN_BLEND)
-			polygon.color = base_color.lightened(variation)
-			return
-	# Neutral region - parchment base
 	var variation := _region_color_variation()
-	polygon.color = NEUTRAL_BASE.lerp(terrain_tint, 0.3).lightened(variation)
+
+	if _has_texture:
+		polygon.color = Color.WHITE
+		# Per-terrain tint alpha override, falling back to global default
+		var alpha_override: float = Constants.TERRAIN_TINT_ALPHA_OVERRIDE.get(
+			region_data.terrain_type, 0.0
+		)
+		var tint_alpha: float = alpha_override if alpha_override > 0.0 else Constants.TINT_ALPHA_POLITICAL
+		if region_data.owner_id >= 0:
+			var civ: CivilizationData = GameState.get_civilization(region_data.owner_id)
+			if civ:
+				var tint_color := Color(civ.color.r, civ.color.g, civ.color.b, tint_alpha)
+				tint_overlay.color = tint_color.lightened(variation)
+				tint_overlay.visible = true
+				return
+		# Neutral: faint terrain-tinted overlay
+		var neutral_tint := NEUTRAL_BASE.lerp(terrain_tint, 0.3)
+		neutral_tint.a = Constants.TINT_ALPHA_NEUTRAL
+		tint_overlay.color = neutral_tint.lightened(variation)
+		tint_overlay.visible = true
+	else:
+		tint_overlay.visible = false
+		if region_data.owner_id >= 0:
+			var civ: CivilizationData = GameState.get_civilization(region_data.owner_id)
+			if civ:
+				var base_color := civ.color.lerp(terrain_tint, TERRAIN_BLEND)
+				polygon.color = base_color.lightened(variation)
+				return
+		polygon.color = NEUTRAL_BASE.lerp(terrain_tint, 0.3).lightened(variation)
 
 
 func _render_terrain() -> void:
-	polygon.color = TERRAIN_COLORS.get(
-		region_data.terrain_type, Color(0.45, 0.45, 0.40)
-	)
+	if _has_texture:
+		polygon.color = Color.WHITE
+		tint_overlay.visible = false
+	else:
+		tint_overlay.visible = false
+		polygon.color = TERRAIN_COLORS.get(
+			region_data.terrain_type, Color(0.45, 0.45, 0.40)
+		)
 
 
 func _render_resources() -> void:
-	if not region_data.resource_stock.is_empty():
-		polygon.color = Color(0.72, 0.58, 0.18)
+	if _has_texture:
+		polygon.color = HEATMAP_BASE_DIM
+		tint_overlay.visible = true
+		if not region_data.resource_stock.is_empty():
+			tint_overlay.color = Color(0.72, 0.58, 0.18, Constants.TINT_ALPHA_HEATMAP)
+		else:
+			tint_overlay.color = Color(0.28, 0.26, 0.22, Constants.TINT_ALPHA_HEATMAP)
 	else:
-		polygon.color = Color(0.28, 0.26, 0.22, 0.7)
+		tint_overlay.visible = false
+		if not region_data.resource_stock.is_empty():
+			polygon.color = Color(0.72, 0.58, 0.18)
+		else:
+			polygon.color = Color(0.28, 0.26, 0.22, 0.7)
 
 
 func _render_supply() -> void:
 	if region_data.owner_id < 0:
 		polygon.color = Color(0.25, 0.25, 0.22, 0.5)
+		tint_overlay.visible = false
 		return
 	var civ: CivilizationData = GameState.get_civilization(region_data.owner_id)
 	if not civ:
 		polygon.color = Color(0.25, 0.25, 0.22, 0.5)
+		tint_overlay.visible = false
 		return
-	var connected: bool = region_data.is_connected_to_capital(
-		GameState.regions, civ.capital_region_id
-	)
-	if connected:
-		polygon.color = civ.color.lerp(Color(0.2, 0.65, 0.2), 0.45)
+
+	# Gradient: green (>0.6) -> yellow (0.3-0.6) -> red (<0.2)
+	var supply := region_data.supply_value
+	var supply_color: Color
+	if supply > 0.6:
+		supply_color = Color(0.2, 0.65, 0.2)
+	elif supply > 0.3:
+		var t := (supply - 0.3) / 0.3
+		supply_color = Color(0.75, 0.65, 0.1).lerp(Color(0.2, 0.65, 0.2), t)
 	else:
-		polygon.color = civ.color.lerp(Color(0.75, 0.2, 0.15), 0.45)
+		var t := supply / 0.3
+		supply_color = Color(0.75, 0.2, 0.15).lerp(Color(0.75, 0.65, 0.1), t)
+
+	if _has_texture:
+		polygon.color = HEATMAP_BASE_DIM
+		tint_overlay.color = Color(
+			supply_color.r, supply_color.g, supply_color.b,
+			Constants.TINT_ALPHA_HEATMAP
+		)
+		tint_overlay.visible = true
+	else:
+		tint_overlay.visible = false
+		polygon.color = civ.color.lerp(supply_color, 0.45)
 
 
 func _render_fronts() -> void:
 	if region_data.owner_id < 0:
 		polygon.color = Color(0.22, 0.22, 0.20, 0.5)
+		tint_overlay.visible = false
 		return
 	var civ: CivilizationData = GameState.get_civilization(region_data.owner_id)
 	if not civ:
 		polygon.color = Color(0.22, 0.22, 0.20, 0.5)
+		tint_overlay.visible = false
 		return
+
 	var is_front := false
 	for adj_id in region_data.adjacency_list:
 		var adj: RegionData = GameState.get_region(adj_id)
@@ -405,19 +390,31 @@ func _render_fronts() -> void:
 			if adj.owner_id in civ.war_targets:
 				is_front = true
 				break
+
+	var front_color: Color
 	if is_front:
-		polygon.color = Color(0.85, 0.15, 0.1)
+		front_color = Color(0.85, 0.15, 0.1)
 	else:
-		polygon.color = civ.color.darkened(0.3)
+		front_color = civ.color.darkened(0.3)
+
+	if _has_texture:
+		polygon.color = HEATMAP_BASE_DIM
+		tint_overlay.color = Color(
+			front_color.r, front_color.g, front_color.b,
+			Constants.TINT_ALPHA_HEATMAP
+		)
+		tint_overlay.visible = true
+	else:
+		tint_overlay.visible = false
+		polygon.color = front_color
 
 
 # --- Helpers ---
 
 func _region_color_variation() -> float:
 	## Subtle brightness variation per region based on ID hash.
-	## Makes provinces visually distinct even within the same civ.
 	var hash_val := (region_data.id * 2654435761) % 1000
-	return (float(hash_val) / 1000.0 - 0.5) * 0.06
+	return (float(hash_val) / 1000.0 - 0.5) * Constants.VARIATION_BRIGHTNESS_RANGE * 2.0
 
 
 # --- Label Management ---

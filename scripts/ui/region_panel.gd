@@ -28,6 +28,8 @@ var food_label: Label
 var production_label: Label
 var defense_label: Label
 var infrastructure_label: Label
+var dev_tier_label: Label
+var pop_density_label: Label
 var resources_label: Label
 
 # Action elements
@@ -180,8 +182,29 @@ func _build_ui() -> void:
 	defense_label = _add_stat_row(vbox, "Defense", "--", Color(0.55, 0.55, 0.78))
 	infrastructure_label = _add_stat_row(vbox, "Infrastructure", "--", UITheme.PARCHMENT_DIM)
 
-	# -- Resources (if any) --
+	# -- Development section --
 	_add_separator(vbox)
+
+	var dev_header := Label.new()
+	dev_header.text = "DEVELOPMENT"
+	UITheme.style_label_body(dev_header, FONT_SECTION, UITheme.GOLD_DIM)
+	dev_header.add_theme_constant_override("margin_top", 2)
+	vbox.add_child(dev_header)
+	_section_labels.append(dev_header)
+
+	dev_tier_label = _add_stat_row(vbox, "Tier", "--", Color(0.65, 0.55, 0.85))
+	pop_density_label = _add_stat_row(vbox, "Pop. Density", "--", UITheme.PARCHMENT_DIM)
+
+	# -- Resources section --
+	_add_separator(vbox)
+
+	var res_header := Label.new()
+	res_header.text = "RESOURCES"
+	UITheme.style_label_body(res_header, FONT_SECTION, UITheme.GOLD_DIM)
+	res_header.add_theme_constant_override("margin_top", 2)
+	vbox.add_child(res_header)
+	_section_labels.append(res_header)
+
 	resources_label = Label.new()
 	resources_label.text = ""
 	resources_label.autowrap_mode = TextServer.AUTOWRAP_WORD
@@ -416,6 +439,8 @@ func _update_display() -> void:
 		Enums.TerrainType.JUNGLE: "Jungle",
 		Enums.TerrainType.COASTLINE: "Coastline",
 		Enums.TerrainType.TUNDRA: "Tundra",
+		Enums.TerrainType.STEPPE: "Steppe",
+		Enums.TerrainType.VOLCANIC_RIDGE: "Volcanic Ridge",
 	}
 	terrain_label.text = terrain_names.get(region.terrain_type, "Unknown")
 
@@ -431,14 +456,47 @@ func _update_display() -> void:
 	defense_label.text = "%.1fx" % region.defense_modifier
 	infrastructure_label.text = "%d / %d" % [region.infrastructure_level, Constants.INFRASTRUCTURE_MAX_LEVEL]
 
-	if region.resource_stock.is_empty():
+	# Development tier info
+	dev_tier_label.text = DevelopmentTierSimulation.get_tier_name(region.development_tier)
+
+	# Population density
+	var capacity: int = Constants.TERRAIN_POP_CAPACITY.get(region.terrain_type, 5000)
+	var effective_cap := int(float(capacity) * region.size_factor)
+	if effective_cap > 0:
+		var density := clampf(float(region.population) / float(effective_cap), 0.0, 1.0)
+		pop_density_label.text = "%.0f%%" % (density * 100.0)
+	else:
+		pop_density_label.text = "0%"
+
+	# Resource pyramid display
+	var res_parts: Array[String] = []
+	var player_civ_for_res := GameState.get_player_civ()
+	var current_era: int = player_civ_for_res.current_era if player_civ_for_res else 0
+
+	# Terrain yields (renewable)
+	var terrain_key: int = region.terrain_type
+	if Constants.RESOURCE_TERRAIN_YIELDS.has(terrain_key):
+		var terrain_yields: Dictionary = Constants.RESOURCE_TERRAIN_YIELDS[terrain_key]
+		for res_type in terrain_yields:
+			if ResourceProduction.is_resource_unlocked(res_type, current_era):
+				var yield_val: int = terrain_yields[res_type]
+				if yield_val > 0:
+					res_parts.append("%s: %d/yr" % [ResourceProduction.get_resource_name(res_type), yield_val])
+
+	# Deposits (finite)
+	for res_type in region.resource_deposits:
+		var remaining: int = region.resource_deposits[res_type]
+		var name_str := ResourceProduction.get_resource_name(res_type)
+		if remaining > 0:
+			res_parts.append("%s: %d left" % [name_str, remaining])
+		else:
+			res_parts.append("%s: Depleted" % name_str)
+
+	if res_parts.is_empty():
 		resources_label.text = ""
 		resources_label.visible = false
 	else:
-		var parts: Array[String] = []
-		for res_name in region.resource_stock:
-			parts.append("%s: %d" % [res_name, region.resource_stock[res_name]])
-		resources_label.text = ", ".join(parts)
+		resources_label.text = "\n".join(res_parts)
 		resources_label.visible = true
 
 	# Action buttons

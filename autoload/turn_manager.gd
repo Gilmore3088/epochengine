@@ -29,7 +29,7 @@ func advance_year() -> void:
 
 func advance_years(count: int) -> void:
 	## Fast-forward multiple years.
-	for i in count:
+	for i in range(count):
 		advance_year()
 
 
@@ -150,6 +150,47 @@ func _emit_events(events: Dictionary) -> void:
 	for ga in events["golden_age_ends"]:
 		EventBus.golden_age_ended.emit(ga["civ_id"])
 		GameState.log_event("golden_age_ended", {"civ": ga["civ_name"]})
+
+	# Development tier changes
+	for change in events["development_tier_changes"]:
+		EventBus.development_tier_changed.emit(
+			change["region_id"], change["civ_id"],
+			change["old_tier"], change["new_tier"]
+		)
+		GameState.log_event("development_tier_changed", {
+			"region": change["region_name"],
+			"civ": change["civ_name"],
+			"old_tier": change["old_tier"],
+			"new_tier": change["new_tier"],
+		})
+
+	# Resource events
+	for res_event in events["resource_events"]:
+		var civ_id: int = res_event["civ_id"]
+		var civ_name: String = res_event["civ_name"]
+
+		# Maintenance failures
+		for penalty in res_event["maintenance_penalties"]:
+			var res_name := ResourceProduction.get_resource_name(penalty["resource"])
+			EventBus.resource_maintenance_failure.emit(
+				civ_id, res_name, penalty["missing_inputs"]
+			)
+			GameState.log_event("maintenance_failure", {
+				"civ": civ_name,
+				"resource": res_name,
+				"missing": penalty["missing_inputs"],
+			})
+
+		# Deposit depletions
+		for depleted in res_event.get("depleted_deposits", []):
+			EventBus.resource_deposit_depleted.emit(
+				depleted["region_id"], civ_id, depleted["resource_name"]
+			)
+			GameState.log_event("deposit_depleted", {
+				"civ": civ_name,
+				"region": depleted["region_name"],
+				"resource": depleted["resource_name"],
+			})
 
 	# Tech emergences
 	for tech in events["tech_emergences"]:

@@ -43,74 +43,68 @@ var BASE_SEEDS: Dictionary = {
 	30: Vector2(310, 715), 31: Vector2(510, 700), 32: Vector2(710, 720),
 	33: Vector2(910, 705), 34: Vector2(1110, 715), 35: Vector2(1290, 702),
 	# Northern Tundra (IDs 36-44)
-	36: Vector2(-52, -87), 37: Vector2(122, -220), 38: Vector2(-87, -356),
-	39: Vector2(202, -436), 40: Vector2(-35, -644), 41: Vector2(199, -662),
-	42: Vector2(408, -508), 43: Vector2(150, -880), 44: Vector2(418, -209),
+	36: Vector2(-52, -69), 37: Vector2(82, -141), 38: Vector2(-135, -256),
+	39: Vector2(123, -297), 40: Vector2(-77, -489), 41: Vector2(129, -466),
+	42: Vector2(299, -308), 43: Vector2(147, -638), 44: Vector2(408, -128),
 	# Eastern Desert Extension (IDs 45-54)
-	45: Vector2(-135, 231), 46: Vector2(-312, 182), 47: Vector2(-406, 360),
-	48: Vector2(-146, 432), 49: Vector2(-636, 408), 50: Vector2(-146, 644),
-	51: Vector2(-535, 636), 52: Vector2(-827, 551), 53: Vector2(-802, 773),
-	54: Vector2(-1093, 696),
+	45: Vector2(-98, 100), 46: Vector2(-91, 248), 47: Vector2(-292, 89),
+	48: Vector2(166, 341), 49: Vector2(-416, 250), 50: Vector2(10, 514),
+	51: Vector2(-185, 421), 52: Vector2(-349, 403), 53: Vector2(-97, 630),
+	54: Vector2(-270, 579),
 	# Western Foothills (IDs 55-62)
-	55: Vector2(1311, -99), 56: Vector2(1455, 288), 57: Vector2(1598, 176),
-	58: Vector2(1196, 611), 59: Vector2(1613, 543), 60: Vector2(1411, 970),
-	61: Vector2(1706, 904), 62: Vector2(1613, 1190),
+	55: Vector2(1047, -116), 56: Vector2(1078, 160), 57: Vector2(1229, -21),
+	58: Vector2(854, 541), 59: Vector2(1090, 348), 60: Vector2(1014, 678),
+	61: Vector2(1212, 597), 62: Vector2(1144, 859),
 	# Central River Extension (IDs 63-72)
-	63: Vector2(585, 795), 64: Vector2(664, 930), 65: Vector2(481, 979),
-	66: Vector2(885, 814), 67: Vector2(496, 1178), 68: Vector2(732, 1065),
-	69: Vector2(673, 1209), 70: Vector2(875, 1207), 71: Vector2(835, 920),
-	72: Vector2(949, 1026),
+	63: Vector2(464, 371), 64: Vector2(609, 198), 65: Vector2(443, 586),
+	66: Vector2(645, 489), 67: Vector2(472, 891), 68: Vector2(613, 808),
+	69: Vector2(616, 973), 70: Vector2(769, 942), 71: Vector2(807, 753),
+	72: Vector2(910, 885),
 	# Jungle Belt (IDs 73-82)
-	73: Vector2(343, 868), 74: Vector2(162, 978), 75: Vector2(293, 1095),
-	76: Vector2(4, 904), 77: Vector2(262, 1279), 78: Vector2(45, 1256),
-	79: Vector2(272, 1452), 80: Vector2(124, 1545), 81: Vector2(458, 1541),
-	82: Vector2(732, 1360),
+	73: Vector2(342, 840), 74: Vector2(172, 942), 75: Vector2(340, 1037),
+	76: Vector2(21, 875), 77: Vector2(273, 1192), 78: Vector2(74, 1156),
+	79: Vector2(272, 1373), 80: Vector2(122, 1351), 81: Vector2(459, 1306),
+	82: Vector2(690, 1111),
 	# Extended Coastline (IDs 83-92)
-	83: Vector2(1447, 589), 84: Vector2(1450, 769), 85: Vector2(1539, 899),
-	86: Vector2(1218, 894), 87: Vector2(1375, 1151), 88: Vector2(939, 1548),
-	89: Vector2(1218, 1438), 90: Vector2(1175, 1733), 91: Vector2(1457, 1641),
-	92: Vector2(1523, 1839),
+	83: Vector2(1529, 435), 84: Vector2(1584, 668), 85: Vector2(1706, 595),
+	86: Vector2(1410, 610), 87: Vector2(1455, 818), 88: Vector2(845, 1236),
+	89: Vector2(1063, 1034), 90: Vector2(918, 1138), 91: Vector2(994, 1305),
+	92: Vector2(840, 1421),
 	# Southern Plains (IDs 93-102)
-	93: Vector2(1123, 1055), 94: Vector2(1225, 1259), 95: Vector2(1031, 1340),
-	96: Vector2(1445, 1438), 97: Vector2(1132, 1594), 98: Vector2(1326, 1766),
-	99: Vector2(1090, 1891), 100: Vector2(1356, 1956), 101: Vector2(1196, 2036),
-	102: Vector2(1308, 1547),
+	93: Vector2(1257, 935), 94: Vector2(1409, 1010), 95: Vector2(1141, 1148),
+	96: Vector2(1276, 1109), 97: Vector2(1186, 1321), 98: Vector2(1354, 1293),
+	99: Vector2(1289, 1478), 100: Vector2(1541, 1344), 101: Vector2(1467, 1476),
+	102: Vector2(1505, 1130),
 	# Far Eastern Oasis (IDs 103-111)
-	103: Vector2(-1497, 786), 104: Vector2(-1737, 845), 105: Vector2(-1893, 888),
-	106: Vector2(-2070, 942), 107: Vector2(-2236, 980), 108: Vector2(-2394, 1038),
-	109: Vector2(-2556, 1069), 110: Vector2(-2695, 1123), 111: Vector2(-2875, 1166),
+	103: Vector2(-198, 790), 104: Vector2(-375, 762), 105: Vector2(-337, 931),
+	106: Vector2(-570, 908), 107: Vector2(-534, 734), 108: Vector2(-717, 730),
+	109: Vector2(-635, 554), 110: Vector2(-800, 470), 111: Vector2(-881, 629),
 	# Northwestern Connection (IDs 112-115)
-	112: Vector2(444, -940), 113: Vector2(674, -749), 114: Vector2(743, -933),
-	115: Vector2(940, -590),
+	112: Vector2(421, -547), 113: Vector2(583, -346), 114: Vector2(658, -502),
+	115: Vector2(811, -286),
 }
 
 # Virtual ocean seeds for coastline generation (not rendered).
 # These push coastal cells inward, creating an organic coastline.
 var OCEAN_SEEDS: Array[Vector2] = [
 	# Top ocean
-	Vector2(-3075, -1240), Vector2(-2775, -1240), Vector2(-2475, -1240),
-	Vector2(-2175, -1240), Vector2(-1875, -1240), Vector2(-1575, -1240),
-	Vector2(-1275, -1240), Vector2(-975, -1240), Vector2(-675, -1240),
-	Vector2(-375, -1240), Vector2(-75, -1240), Vector2(225, -1240),
-	Vector2(525, -1240), Vector2(825, -1240), Vector2(1125, -1240),
-	Vector2(1425, -1240), Vector2(1725, -1240),
+	Vector2(-1081, -938), Vector2(-781, -938), Vector2(-481, -938),
+	Vector2(-181, -938), Vector2(119, -938), Vector2(419, -938),
+	Vector2(719, -938), Vector2(1019, -938), Vector2(1319, -938),
+	Vector2(1619, -938),
 	# Bottom ocean
-	Vector2(-3075, 2336), Vector2(-2775, 2336), Vector2(-2475, 2336),
-	Vector2(-2175, 2336), Vector2(-1875, 2336), Vector2(-1575, 2336),
-	Vector2(-1275, 2336), Vector2(-975, 2336), Vector2(-675, 2336),
-	Vector2(-375, 2336), Vector2(-75, 2336), Vector2(225, 2336),
-	Vector2(525, 2336), Vector2(825, 2336), Vector2(1125, 2336),
-	Vector2(1425, 2336), Vector2(1725, 2336),
+	Vector2(-1081, 1778), Vector2(-781, 1778), Vector2(-481, 1778),
+	Vector2(-181, 1778), Vector2(119, 1778), Vector2(419, 1778),
+	Vector2(719, 1778), Vector2(1019, 1778), Vector2(1319, 1778),
+	Vector2(1619, 1778),
 	# Left ocean
-	Vector2(-3175, -1140), Vector2(-3175, -840), Vector2(-3175, -540),
-	Vector2(-3175, -240), Vector2(-3175, 60), Vector2(-3175, 360),
-	Vector2(-3175, 660), Vector2(-3175, 960), Vector2(-3175, 1260),
-	Vector2(-3175, 1560), Vector2(-3175, 1860), Vector2(-3175, 2160),
+	Vector2(-1181, -838), Vector2(-1181, -538), Vector2(-1181, -238),
+	Vector2(-1181, 62), Vector2(-1181, 362), Vector2(-1181, 662),
+	Vector2(-1181, 962), Vector2(-1181, 1262), Vector2(-1181, 1562),
 	# Right ocean
-	Vector2(2006, -1140), Vector2(2006, -840), Vector2(2006, -540),
-	Vector2(2006, -240), Vector2(2006, 60), Vector2(2006, 360),
-	Vector2(2006, 660), Vector2(2006, 960), Vector2(2006, 1260),
-	Vector2(2006, 1560), Vector2(2006, 1860), Vector2(2006, 2160),
+	Vector2(2006, -838), Vector2(2006, -538), Vector2(2006, -238),
+	Vector2(2006, 62), Vector2(2006, 362), Vector2(2006, 662),
+	Vector2(2006, 962), Vector2(2006, 1262), Vector2(2006, 1562),
 ]
 
 
@@ -208,8 +202,8 @@ func _compute_voronoi() -> void:
 	var all_ids: Array = all_seeds.keys()
 
 	# Bounding rectangle (much larger than map to avoid edge artifacts)
-	var bounds_pos := Vector2(-3600, -1600)
-	var bounds_end := Vector2(2400, 2800)
+	var bounds_pos := Vector2(-1381, -1138)
+	var bounds_end := Vector2(2206, 1978)
 
 	for id_a in all_ids:
 		# Start each cell as the bounding rectangle
@@ -452,9 +446,9 @@ static func _centroid(poly: PackedVector2Array) -> Vector2:
 
 func _build_ocean() -> void:
 	## Layered ocean with depth rings for visual richness.
-	# Bounds must cover the full expanded map (-2875..1706 x, -940..2036 y)
-	var bounds := [Vector2(-3500, -1500), Vector2(2300, -1500),
-		Vector2(2300, 2700), Vector2(-3500, 2700)]
+	# Bounds cover the tightened map (-881..1706 x, -638..1478 y)
+	var bounds := [Vector2(-1800, -1400), Vector2(2500, -1400),
+		Vector2(2500, 2200), Vector2(-1800, 2200)]
 
 	# Deep ocean base
 	var ocean_deep := Polygon2D.new()
@@ -466,8 +460,8 @@ func _build_ocean() -> void:
 	# Mid ocean ring (slightly lighter near land)
 	var ocean_mid := Polygon2D.new()
 	ocean_mid.polygon = PackedVector2Array([
-		Vector2(-3200, -1200), Vector2(2000, -1200),
-		Vector2(2000, 2400), Vector2(-3200, 2400),
+		Vector2(-1500, -1200), Vector2(2300, -1200),
+		Vector2(2300, 2000), Vector2(-1500, 2000),
 	])
 	ocean_mid.color = Color(0.08, 0.10, 0.19)
 	ocean_mid.z_index = -9
@@ -476,8 +470,8 @@ func _build_ocean() -> void:
 	# Shallow ocean ring (closest to coast)
 	var ocean_shallow := Polygon2D.new()
 	ocean_shallow.polygon = PackedVector2Array([
-		Vector2(-3000, -1000), Vector2(1800, -1000),
-		Vector2(1800, 2200), Vector2(-3000, 2200),
+		Vector2(-1300, -1000), Vector2(2100, -1000),
+		Vector2(2100, 1900), Vector2(-1300, 1900),
 	])
 	ocean_shallow.color = OCEAN_COLOR
 	ocean_shallow.z_index = -8
@@ -489,7 +483,7 @@ func _build_ocean() -> void:
 
 func _build_compass_rose() -> void:
 	## Subtle directional indicator in the bottom-right ocean area.
-	var center := Vector2(2050, 2400)
+	var center := Vector2(2100, 1800)
 	var arm_len := 18.0
 	var color := Color(0.25, 0.22, 0.18, 0.25)
 

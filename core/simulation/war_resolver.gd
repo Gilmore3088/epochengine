@@ -50,8 +50,13 @@ static func apply_battle_result(
 	# Transfer region to winner
 	contested_region.owner_id = winner_id
 
+	# Conquest tier drop: war devastation reduces development
+	contested_region.development_tier = maxi(0, contested_region.development_tier - Constants.DEV_CONQUEST_TIER_DROP)
+	contested_region.demotion_years = 0
+	contested_region.urbanization_level = float(contested_region.development_tier) / 5.0
+
 	# Stability loss for loser
-	var stability_loss := randi_range(
+	var stability_loss := GameState.sim_rng.randi_range(
 		Constants.WAR_STABILITY_LOSS_MIN, Constants.WAR_STABILITY_LOSS_MAX
 	)
 
@@ -97,7 +102,7 @@ static func _calculate_strength(
 	var doctrine := _doctrine_modifier(civ)
 	var terrain := _terrain_modifier(region, is_attacker)
 	var supply := _supply_modifier(civ, region)
-	var variance := randf_range(
+	var variance := GameState.sim_rng.randf_range(
 		Constants.BATTLE_VARIANCE_MIN, Constants.BATTLE_VARIANCE_MAX
 	)
 
@@ -134,25 +139,24 @@ static func _doctrine_modifier(civ: CivilizationData) -> float:
 
 
 static func _terrain_modifier(region: RegionData, is_attacker: bool) -> float:
-	## Defender gets terrain bonus, attacker gets penalty.
+	## Defender gets terrain bonus + development tier bonus, attacker gets penalty.
 	## Larger regions (size_factor > 1) are harder to attack and easier to defend.
 	var size_mod := lerpf(1.0, region.size_factor, 0.3)  # 30% influence
+	var dev_defense := DevelopmentTierSimulation.get_defense_bonus(region.development_tier)
 	if is_attacker:
 		return 1.0 / (region.defense_modifier * size_mod)
 	else:
-		return region.defense_modifier * size_mod
+		return (region.defense_modifier + dev_defense) * size_mod
 
 
 static func _supply_modifier(civ: CivilizationData, region: RegionData) -> float:
-	## Phase 1: simplified to connected/disconnected check.
+	## Supply modifier based on Dijkstra supply routing.
+	## Defender uses own supply value; attacker uses best adjacent supply.
+	var supply: float
 	if region.owner_id == civ.id:
-		return Constants.SUPPLY_MODIFIER_CONNECTED
+		supply = region.supply_value
+	else:
+		supply = SupplySystem.get_best_adjacent_supply(region, civ.id)
 
-	# Check if attacker has supply route
-	var all_regions := GameState.regions
-	for adj_id in region.adjacency_list:
-		var adj_region: RegionData = all_regions.get(adj_id)
-		if adj_region and adj_region.owner_id == civ.id:
-			return Constants.SUPPLY_MODIFIER_CONNECTED
-
-	return Constants.SUPPLY_MODIFIER_DISCONNECTED
+	# Map supply (0.0-1.0) to combat modifier (0.5-1.0)
+	return lerpf(Constants.SUPPLY_MODIFIER_DISCONNECTED, Constants.SUPPLY_MODIFIER_CONNECTED, supply)

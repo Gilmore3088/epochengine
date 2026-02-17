@@ -8,6 +8,10 @@ var is_running: bool = false
 var current_overlay: int = Enums.MapOverlay.POLITICAL
 var player_civ_id: int = 0
 
+# Seeded RNG for deterministic simulation. All simulation randomness goes through this.
+var sim_rng := RandomNumberGenerator.new()
+var sim_seed: int = 0
+
 # Core data dictionaries keyed by id
 var regions: Dictionary = {}         # {int: RegionData}
 var civilizations: Dictionary = {}   # {int: CivilizationData}
@@ -19,7 +23,17 @@ var turn_log: Array[Dictionary] = []  # Events logged this turn
 
 
 func _ready() -> void:
+	set_sim_seed(0)  # Default seed; benchmark/tests can override
 	load_game_data()
+
+
+func set_sim_seed(seed_value: int) -> void:
+	## Set the simulation RNG seed. Use 0 for random seed.
+	if seed_value == 0:
+		sim_seed = randi()
+	else:
+		sim_seed = seed_value
+	sim_rng.seed = sim_seed
 
 
 func load_game_data() -> void:
@@ -34,15 +48,23 @@ func _load_regions() -> void:
 		push_error("Cannot open regions directory")
 		return
 
+	# Collect and sort file names for deterministic load order
+	var file_names: Array[String] = []
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
 		if file_name.ends_with(".tres"):
-			var region: RegionData = load("res://data/regions/" + file_name).duplicate()
-			if region:
-				regions[region.id] = region
+			file_names.append(file_name)
 		file_name = dir.get_next()
 	dir.list_dir_end()
+	file_names.sort()
+
+	for fname in file_names:
+		var region: RegionData = ResourceLoader.load(
+			"res://data/regions/" + fname, "", ResourceLoader.CACHE_MODE_IGNORE
+		)
+		if region:
+			regions[region.id] = region
 
 
 func _load_civilizations() -> void:
@@ -51,15 +73,23 @@ func _load_civilizations() -> void:
 		push_error("Cannot open civilizations directory")
 		return
 
+	# Collect and sort file names for deterministic load order
+	var file_names: Array[String] = []
 	dir.list_dir_begin()
 	var file_name := dir.get_next()
 	while file_name != "":
 		if file_name.ends_with(".tres"):
-			var civ: CivilizationData = load("res://data/civilizations/" + file_name).duplicate()
-			if civ:
-				civilizations[civ.id] = civ
+			file_names.append(file_name)
 		file_name = dir.get_next()
 	dir.list_dir_end()
+	file_names.sort()
+
+	for fname in file_names:
+		var civ: CivilizationData = ResourceLoader.load(
+			"res://data/civilizations/" + fname, "", ResourceLoader.CACHE_MODE_IGNORE
+		)
+		if civ:
+			civilizations[civ.id] = civ
 
 
 func _recalculate_civ_populations() -> void:

@@ -35,7 +35,7 @@ func test_overextension_no_penalty_under_threshold() -> void:
 	# Stability should not have overextension penalty
 	# We can't isolate the function easily, so test the behavior
 	# With 7 regions, no overextension penalty
-	seed(42)  # Deterministic
+	GameState.set_sim_seed(42)  # Deterministic
 	var new_stability := StabilitySimulation.recalculate(civ, regions)
 	assert_true(new_stability >= 0.0 and new_stability <= 100.0,
 		"Stability should be in valid range")
@@ -53,11 +53,11 @@ func test_overextension_penalty_above_threshold() -> void:
 	for i in 30:  # 30 regions, well above admin capacity
 		large_regions.append(_make_region(i, 0))
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var stab_small := StabilitySimulation.recalculate(civ, small_regions)
 
 	civ.stability = 80.0  # Reset
-	seed(42)  # Same seed for same random values
+	GameState.set_sim_seed(42)  # Same seed for same random values
 	var stab_large := StabilitySimulation.recalculate(civ, large_regions)
 
 	# 30 regions = well above admin capacity, quadratic penalty applies
@@ -121,7 +121,7 @@ func test_stability_clamped_to_max() -> void:
 	# Good food, no wars, few regions
 	var regions: Array[RegionData] = [_make_region(0, 0)]
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var new_stability := StabilitySimulation.recalculate(civ, regions)
 	assert_true(new_stability <= Constants.STABILITY_MAX,
 		"Stability should never exceed maximum")
@@ -150,12 +150,12 @@ func test_war_exhaustion_no_wars() -> void:
 	civ.war_targets = []
 	var regions: Array[RegionData] = [_make_region(0, 0)]
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var s1 := StabilitySimulation.recalculate(civ, regions)
 
 	civ.stability = 50.0
 	civ.war_targets = [1, 2]
-	seed(42)
+	GameState.set_sim_seed(42)
 	var s2 := StabilitySimulation.recalculate(civ, regions)
 
 	assert_true(s1 > s2, "Wars should reduce stability via exhaustion")
@@ -167,7 +167,7 @@ func test_reformer_hero_boosts_stability() -> void:
 	var civ := _make_civ(50.0, 0, 5000)
 	var regions: Array[RegionData] = [_make_region(0, 0)]
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var s_no_hero := StabilitySimulation.recalculate(civ, regions)
 
 	civ.stability = 50.0
@@ -176,7 +176,7 @@ func test_reformer_hero_boosts_stability() -> void:
 	GameState.add_hero(hero)
 	civ.hero_ids = [hero.id]
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var s_with_hero := StabilitySimulation.recalculate(civ, regions)
 
 	assert_true(s_with_hero > s_no_hero,

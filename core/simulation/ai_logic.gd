@@ -57,16 +57,36 @@ static func _try_expand(civ: CivilizationData) -> Array[Dictionary]:
 		return []
 
 	# Expansion friction: growth slows as empire gets larger
-	var expansion_factor := 1.0 / (1.0 + float(region_count) / Constants.EXPANSION_FRICTION_DIVISOR)
-	if randf() > civ.expansion_bias * expansion_factor:
+	# Governance tier reduces friction (better-organized states expand more efficiently)
+	var gov_friction_mod := GovernanceSimulation.get_expansion_friction_mod(civ.governance_tier)
+	var effective_divisor := Constants.EXPANSION_FRICTION_DIVISOR / gov_friction_mod
+	var expansion_factor := 1.0 / (1.0 + float(region_count) / effective_divisor)
+	if GameState.sim_rng.randf() > civ.expansion_bias * expansion_factor:
 		return []
 
-	# Pick highest food_yield neutral region
+	# Pick best neutral region: supply proximity > high-tier neighbors > resource deposits > food yield
 	neutral_targets.sort_custom(func(a: RegionData, b: RegionData) -> bool:
+		# Prefer targets adjacent to well-supplied owned regions
+		var a_supply := _best_adjacent_supply(a, civ.id)
+		var b_supply := _best_adjacent_supply(b, civ.id)
+		if absf(a_supply - b_supply) > 0.2:
+			return a_supply > b_supply
+		var a_adj_tier := _best_adjacent_tier(a, civ.id)
+		var b_adj_tier := _best_adjacent_tier(b, civ.id)
+		if a_adj_tier != b_adj_tier:
+			return a_adj_tier > b_adj_tier
+		var a_res := _resource_value(a)
+		var b_res := _resource_value(b)
+		if a_res != b_res:
+			return a_res > b_res
 		return a.food_yield > b.food_yield
 	)
 
 	var target := neutral_targets[0]
+
+	# Reject expansion into poorly supplied territory
+	if _best_adjacent_supply(target, civ.id) < Constants.SUPPLY_MIN_THRESHOLD:
+		return []
 
 	# Find best source region for settlers (highest population, adjacent to target)
 	var source_region: RegionData = null
@@ -132,7 +152,7 @@ static func _try_declare_war(civ: CivilizationData) -> Array[Dictionary]:
 			var imbalance := (strength_ratio - 1.0) / Constants.WAR_PARITY_THRESHOLD
 			war_chance = Constants.WAR_BASE_CHANCE * minf(imbalance, Constants.WAR_IMBALANCE_MULTIPLIER) * civ.aggression_bias
 
-		if randf() < war_chance:
+		if GameState.sim_rng.randf() < war_chance:
 			civ.war_targets.append(neighbor_id)
 			neighbor.war_targets.append(civ.id)
 			civ.war_durations[neighbor_id] = 0
@@ -160,7 +180,7 @@ static func _try_seek_peace(civ: CivilizationData) -> Array[Dictionary]:
 		longest_war = maxi(longest_war, int(civ.war_durations.get(tid, 0)))
 	var fatigue_boost := minf(float(longest_war) * 0.05, 0.4)
 	var peace_chance := ((1.0 - civ.stability / Constants.STABILITY_MAX) + fatigue_boost) * civ.diplomacy_bias
-	if randf() < peace_chance:
+	if GameState.sim_rng.randf() < peace_chance:
 		var target_id: int = civ.war_targets[0]
 		var target := GameState.get_civilization(target_id)
 
@@ -188,8 +208,12 @@ static func _try_invest_infrastructure(civ: CivilizationData) -> Array[Dictionar
 		return []
 
 	var owned_regions := GameState.get_regions_by_owner(civ.id)
-	# Sort by lowest infrastructure (upgrade weakest first)
+	# Prioritize regions closest to next tier promotion gate
 	owned_regions.sort_custom(func(a: RegionData, b: RegionData) -> bool:
+		var a_gap := _infra_gap_to_next_tier(a)
+		var b_gap := _infra_gap_to_next_tier(b)
+		if a_gap != b_gap:
+			return a_gap < b_gap  # smaller gap = closer to promotion
 		return a.infrastructure_level < b.infrastructure_level
 	)
 
@@ -238,7 +262,7 @@ static func _try_seek_alliance(civ: CivilizationData) -> Array[Dictionary]:
 			+ shared_enemy_bonus
 		)
 
-		if randf() < alliance_chance:
+		if GameState.sim_rng.randf() < alliance_chance:
 			civ.alliance_partners.append(neighbor_id)
 			neighbor.alliance_partners.append(civ.id)
 			return [{
@@ -250,3 +274,39 @@ static func _try_seek_alliance(civ: CivilizationData) -> Array[Dictionary]:
 			}]
 
 	return []
+
+
+static func _best_adjacent_tier(target: RegionData, civ_id: int) -> int:
+	## Returns the highest development_tier of owned regions adjacent to target.
+	var best := 0
+	for adj_id in target.adjacency_list:
+		var adj := GameState.get_region(adj_id)
+		if adj and adj.owner_id == civ_id:
+			best = maxi(best, adj.development_tier)
+	return best
+
+
+static func _infra_gap_to_next_tier(region: RegionData) -> int:
+	## Returns infrastructure gap to the next tier gate. Lower = closer to promotion.
+	var next_tier := region.development_tier + 1
+	if next_tier >= Constants.DEV_TIER_GATES.size():
+		return 99  # already max, deprioritize
+	var needed_infra: int = Constants.DEV_TIER_GATES[next_tier][0]
+	return maxi(needed_infra - region.infrastructure_level, 0)
+
+
+static func _best_adjacent_supply(target: RegionData, civ_id: int) -> float:
+	## Returns the highest supply_value of owned regions adjacent to target.
+	return SupplySystem.get_best_adjacent_supply(target, civ_id)
+
+
+static func _resource_value(region: RegionData) -> int:
+	## Estimates total resource value of a region (deposits + terrain yields).
+	var value := 0
+	for res_type in region.resource_deposits:
+		value += region.resource_deposits[res_type] / 100  # normalize large deposit values
+	var terrain_key: int = region.terrain_type
+	if Constants.RESOURCE_TERRAIN_YIELDS.has(terrain_key):
+		for res_type in Constants.RESOURCE_TERRAIN_YIELDS[terrain_key]:
+			value += Constants.RESOURCE_TERRAIN_YIELDS[terrain_key][res_type]
+	return value

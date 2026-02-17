@@ -10,7 +10,7 @@ static func calculate_growth(region: RegionData, civ: CivilizationData) -> int:
 	var base_rate := _get_base_growth_rate(region)
 	var food_mod := _get_food_modifier(civ)
 	var stability_mod := _get_stability_modifier(civ)
-	var variance := randf_range(
+	var variance := GameState.sim_rng.randf_range(
 		Constants.RANDOM_VARIANCE_MIN, Constants.RANDOM_VARIANCE_MAX
 	)
 

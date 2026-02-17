@@ -59,6 +59,8 @@ func _setup_known_state() -> void:
 	civ.diplomacy_bias = 0.6
 	civ.economy_bias = 0.9
 	civ.war_targets = [1]
+	civ.war_durations = {1: 7}
+	civ.peace_cooldowns = {2: 3}
 	civ.alliance_partners = []
 	civ.consecutive_low_stability_years = 0
 	civ.technologies = ["irrigation", "bronze_working"]
@@ -231,6 +233,18 @@ func test_round_trip_preserves_war_and_tech() -> void:
 	assert_eq(civ.technologies.size(), 2)
 	assert_true("irrigation" in civ.technologies)
 	assert_true("bronze_working" in civ.technologies)
+
+
+func test_round_trip_preserves_war_timers() -> void:
+	_setup_known_state()
+	SaveManager.save_game(TEST_SLOT)
+
+	GameState.civilizations.clear()
+	SaveManager.load_game(TEST_SLOT)
+
+	var civ: CivilizationData = GameState.civilizations[0]
+	assert_eq(civ.war_durations.get(1), 7)
+	assert_eq(civ.peace_cooldowns.get(2), 3)
 
 
 func test_round_trip_preserves_collapsed_civ() -> void:

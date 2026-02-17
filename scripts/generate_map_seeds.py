@@ -110,33 +110,33 @@ NEW_ADJACENCY = {
 # Zone hints: push new regions outward from center to form a larger continent
 # (region_id, direction_x, direction_y) - bias for initial placement
 ZONE_BIAS = {}
-# Northern tundra: push north
+# Northern tundra: push north (gentle)
 for rid in range(36, 45):
-    ZONE_BIAS[rid] = (0, -180)
-# Eastern desert: push west/south
+    ZONE_BIAS[rid] = (0, -50)
+# Eastern desert: push west/south (gentle)
 for rid in range(45, 55):
-    ZONE_BIAS[rid] = (-200, 50)
-# Western foothills: push east/south
+    ZONE_BIAS[rid] = (-35, 15)
+# Western foothills: push east/south (moderate)
 for rid in range(55, 63):
-    ZONE_BIAS[rid] = (200, 150)
+    ZONE_BIAS[rid] = (50, 40)
 # Central river extension: push south
 for rid in range(63, 73):
-    ZONE_BIAS[rid] = (0, 200)
-# Jungle belt: push south
+    ZONE_BIAS[rid] = (0, 55)
+# Jungle belt: push south-west (gentle)
 for rid in range(73, 83):
-    ZONE_BIAS[rid] = (-50, 200)
+    ZONE_BIAS[rid] = (-15, 55)
 # Extended coastline: push east/south
 for rid in range(83, 93):
-    ZONE_BIAS[rid] = (150, 200)
+    ZONE_BIAS[rid] = (40, 55)
 # Southern plains: push south
 for rid in range(93, 103):
-    ZONE_BIAS[rid] = (0, 300)
-# Far eastern oasis: push far west
+    ZONE_BIAS[rid] = (0, 80)
+# Far eastern oasis: push west (close to core)
 for rid in range(103, 112):
-    ZONE_BIAS[rid] = (-350, 100)
-# Northwestern connection: push north-east
+    ZONE_BIAS[rid] = (-35, 15)
+# Northwestern connection: push north-east (gentle)
 for rid in range(112, 116):
-    ZONE_BIAS[rid] = (150, -250)
+    ZONE_BIAS[rid] = (30, -50)
 
 
 def initialize_positions():
@@ -170,9 +170,9 @@ def force_directed_layout(positions, iterations=300):
     # Build full adjacency including existing region connections
     all_adj = dict(NEW_ADJACENCY)
 
-    REPEL_STRENGTH = 50000.0
-    ATTRACT_STRENGTH = 0.01
-    MIN_DIST = 100.0  # Minimum distance between any two seeds
+    REPEL_STRENGTH = 55000.0
+    ATTRACT_STRENGTH = 0.02
+    MIN_DIST = 120.0  # Minimum distance between any two seeds
     DAMPING = 0.85
 
     new_ids = list(NEW_ADJACENCY.keys())
@@ -204,7 +204,7 @@ def force_directed_layout(positions, iterations=300):
                 dx = pos[neighbor][0] - pos[rid][0]
                 dy = pos[neighbor][1] - pos[rid][1]
                 dist = math.sqrt(dx*dx + dy*dy)
-                target_dist = 160.0  # Ideal distance between neighbors
+                target_dist = 150.0  # Ideal distance between neighbors
                 if dist > 0:
                     force = (dist - target_dist) * ATTRACT_STRENGTH
                     forces[rid][0] += (dx / dist) * force

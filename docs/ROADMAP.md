@@ -66,6 +66,19 @@
 - [x] Resizable panel with A-/A+ font scaling (0.8x to 1.4x)
 - [x] Fixed panel closing on button click (_unhandled_input fix)
 
+### Stage 4: Governance Architecture [COMPLETE]
+- [x] GovernanceTier enum (Tribal, Chiefdom, City-State, Kingdom, Empire, Federation)
+- [x] Governance fields on CivilizationData (tier, years in tier)
+- [x] Tier transition logic with promotion and demotion hysteresis (5yr)
+- [x] Admin capacity bonus from governance tier
+- [x] Expansion friction reduction for higher-tier civs
+- [x] Infrastructure stability floor (avg_infra * 2.0)
+- [x] Infrastructure military reinforcement bonus (+5% per avg level)
+- [x] Future-compat placeholders on RegionData (urbanization_level, town_count, supply_value)
+- [x] New terrain types: STEPPE, VOLCANIC_RIDGE (enums + constants, no regions assigned)
+- [x] Save/load for all new fields (backward compatible)
+- [x] 148 tests pass, benchmark equilibrium maintained (6/10 multi-civ, avg 1.7)
+
 ### Sprint F: Map Polish [NOT STARTED]
 - [ ] Retune seed positions (tighten continent bounds)
 - [ ] Recompute ocean/compass for new bounds

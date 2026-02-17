@@ -11,10 +11,17 @@ extends Resource
 @export var food_yield: int = 3
 @export var production_yield: int = 3
 @export var defense_modifier: float = 1.0
-@export var resource_stock: Dictionary = {}  # {"coal": 100, "oil": 50}
+@export var resource_stock: Dictionary = {}  # legacy placeholder
+@export var resource_deposits: Dictionary = {}  # {resource_type_int: remaining_quantity}
+@export var extraction_years: int = 0  # years of active extraction
 @export var adjacency_list: Array[int] = []
 @export var infrastructure_level: int = 0  # 0-5
 @export var size_factor: float = 1.0  # normalized area (1.0 = average region)
+@export var development_tier: int = 0  # 0-5 (DevelopmentTier enum value)
+@export var demotion_years: int = 0  # years below threshold (hysteresis for demotion)
+@export var urbanization_level: float = 0.0  # derived from development_tier / 5.0
+@export var town_count: int = 0  # placeholder for Phase 3, 0 = no towns yet
+@export var supply_value: float = 1.0  # placeholder for Sprint G, 1.0 = full supply
 
 
 func _init(
@@ -26,6 +33,7 @@ func _init(
 	region_name = p_name
 	terrain_type = p_terrain
 	_apply_terrain_defaults()
+	_init_resource_deposits()
 
 
 func _apply_terrain_defaults() -> void:
@@ -58,6 +66,27 @@ func _apply_terrain_defaults() -> void:
 			food_yield = Constants.YIELD_TUNDRA.x
 			production_yield = Constants.YIELD_TUNDRA.y
 			defense_modifier = Constants.DEFENSE_TUNDRA
+		Enums.TerrainType.STEPPE:
+			food_yield = Constants.YIELD_STEPPE.x
+			production_yield = Constants.YIELD_STEPPE.y
+			defense_modifier = Constants.DEFENSE_STEPPE
+		Enums.TerrainType.VOLCANIC_RIDGE:
+			food_yield = Constants.YIELD_VOLCANIC_RIDGE.x
+			production_yield = Constants.YIELD_VOLCANIC_RIDGE.y
+			defense_modifier = Constants.DEFENSE_VOLCANIC_RIDGE
+
+
+func _init_resource_deposits() -> void:
+	var terrain_key: int = terrain_type
+	if not Constants.DEPOSIT_QUANTITIES.has(terrain_key):
+		return
+	var deposits_for_terrain: Dictionary = Constants.DEPOSIT_QUANTITIES[terrain_key]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = id * 1000 + 42  # deterministic per region
+	for resource_type in deposits_for_terrain:
+		var range_arr: Array = deposits_for_terrain[resource_type]
+		var quantity := rng.randi_range(range_arr[0], range_arr[1])
+		resource_deposits[resource_type] = quantity
 
 
 func is_neutral() -> bool:

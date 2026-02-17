@@ -43,7 +43,7 @@ func _reset_game_state() -> void:
 
 
 func _run_benchmark(run_idx: int) -> Dictionary:
-	seed(run_idx * 31337 + 42)
+	GameState.set_sim_seed(run_idx * 31337 + 42)
 
 	var stats := {
 		"collapses": 0,

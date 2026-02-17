@@ -30,7 +30,7 @@ func test_population_grows_in_normal_conditions() -> void:
 	var civ := _make_civ(50.0, 100, 5000)
 	var region := _make_region(Enums.TerrainType.PLAINS, 1000)
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var new_pop := PopulationSimulation.calculate_growth(region, civ)
 	assert_true(new_pop > 1000, "Population should grow in normal conditions")
 
@@ -40,9 +40,9 @@ func test_river_basin_grows_fastest() -> void:
 	var river := _make_region(Enums.TerrainType.RIVER_BASIN, 1000)
 	var tundra := _make_region(Enums.TerrainType.TUNDRA, 1000)
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var pop_river := PopulationSimulation.calculate_growth(river, civ)
-	seed(42)
+	GameState.set_sim_seed(42)
 	var pop_tundra := PopulationSimulation.calculate_growth(tundra, civ)
 
 	assert_true(pop_river > pop_tundra,
@@ -53,12 +53,12 @@ func test_golden_age_boosts_growth() -> void:
 	var civ := _make_civ(50.0, 100, 5000)
 	var region := _make_region(Enums.TerrainType.PLAINS, 1000)
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var normal_pop := PopulationSimulation.calculate_growth(region, civ)
 
 	civ.golden_age_years_remaining = 10
 	region.population = 1000
-	seed(42)
+	GameState.set_sim_seed(42)
 	var golden_pop := PopulationSimulation.calculate_growth(region, civ)
 
 	assert_true(golden_pop > normal_pop,
@@ -70,11 +70,11 @@ func test_famine_reduces_growth() -> void:
 	var civ_famine := _make_civ(50.0, -500, 5000)
 	var region := _make_region(Enums.TerrainType.PLAINS, 1000)
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var pop_surplus := PopulationSimulation.calculate_growth(region, civ_surplus)
 
 	region.population = 1000
-	seed(42)
+	GameState.set_sim_seed(42)
 	var pop_famine := PopulationSimulation.calculate_growth(region, civ_famine)
 
 	assert_true(pop_surplus > pop_famine,
@@ -86,11 +86,11 @@ func test_low_stability_reduces_growth() -> void:
 	var civ_unstable := _make_civ(10.0, 100, 5000)
 	var region := _make_region(Enums.TerrainType.PLAINS, 1000)
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	var pop_stable := PopulationSimulation.calculate_growth(region, civ_stable)
 
 	region.population = 1000
-	seed(42)
+	GameState.set_sim_seed(42)
 	var pop_unstable := PopulationSimulation.calculate_growth(region, civ_unstable)
 
 	assert_true(pop_stable > pop_unstable,

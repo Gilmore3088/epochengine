@@ -55,6 +55,13 @@ signal infrastructure_upgraded(civ_id: int, region_name: String, new_level: int)
 signal region_right_clicked(region_id: int, screen_position: Vector2)
 signal player_action_queued(action_type: String, details: Dictionary)
 
+# --- Development Tiers ---
+signal development_tier_changed(region_id: int, civ_id: int, old_tier: String, new_tier: String)
+
+# --- Resources ---
+signal resource_deposit_depleted(region_id: int, civ_id: int, resource_name: String)
+signal resource_maintenance_failure(civ_id: int, resource_name: String, missing_inputs: int)
+
 # --- UI ---
 signal region_selected(region_id: int)
 signal region_deselected()

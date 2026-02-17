@@ -95,7 +95,7 @@ func test_apply_battle_loser_loses_stability() -> void:
 	var result := {"winner_id": 0, "loser_id": 1,
 		"attacker_strength": 100.0, "defender_strength": 80.0, "region_id": 0}
 
-	seed(42)
+	GameState.set_sim_seed(42)
 	WarResolver.apply_battle_result(result, attacker, defender, region)
 
 	assert_true(defender.stability < 80.0,

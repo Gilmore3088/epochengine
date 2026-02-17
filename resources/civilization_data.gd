@@ -15,6 +15,9 @@ extends Resource
 @export var hero_ids: Array[int] = []
 @export var is_collapsed: bool = false
 @export var is_player: bool = false
+@export var governance_tier: Enums.GovernanceTier = Enums.GovernanceTier.TRIBAL
+@export var governance_years: int = 0  # years spent in current tier
+@export var current_era: Enums.Epoch = Enums.Epoch.PREHISTORIC
 
 # Golden age state
 @export var golden_age_years_remaining: int = 0
@@ -42,6 +45,10 @@ extends Resource
 
 # Discovered technologies
 @export var technologies: Array[String] = []
+
+# Resource pyramid stockpiles (pooled at civ level)
+@export var resource_stockpiles: Dictionary = {}  # {resource_type_int: amount}
+@export var resource_production_log: Dictionary = {}  # {resource_type_int: last_turn_production}
 
 
 func _init(

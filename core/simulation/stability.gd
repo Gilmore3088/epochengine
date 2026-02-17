@@ -20,7 +20,7 @@ static func recalculate(civ: CivilizationData, owned_regions: Array[RegionData])
 	var admin_cap := _admin_capacity(civ, owned_regions)
 	var overextension := _overextension_penalty(region_count, admin_cap)
 	var disconnected := _disconnected_territory_penalty(civ, owned_regions)
-	var political := randf_range(
+	var political := GameState.sim_rng.randf_range(
 		Constants.RANDOM_POLITICAL_SHIFT_MIN,
 		Constants.RANDOM_POLITICAL_SHIFT_MAX,
 	)
@@ -48,6 +48,9 @@ static func recalculate(civ: CivilizationData, owned_regions: Array[RegionData])
 	if is_compact:
 		compact_floor = Constants.COMPACT_STABILITY_FLOOR
 
+	# Infrastructure provides a stability floor (developed civs resist total collapse)
+	var infra_floor := _average_infrastructure(owned_regions) * Constants.INFRA_STABILITY_FLOOR_PER_LEVEL
+
 	var new_stability := (
 		base + food_factor - war_exhaust - shortage
 		+ hero_mod - overextension - disconnected + political
@@ -56,6 +59,7 @@ static func recalculate(civ: CivilizationData, owned_regions: Array[RegionData])
 	new_stability = clampf(new_stability, Constants.STABILITY_MIN, Constants.STABILITY_MAX)
 	new_stability = maxf(new_stability, golden_floor)
 	new_stability = maxf(new_stability, compact_floor)
+	new_stability = maxf(new_stability, infra_floor)
 
 	return new_stability
 
@@ -137,7 +141,11 @@ static func _admin_capacity(civ: CivilizationData, owned_regions: Array[RegionDa
 		infra_total += region.infrastructure_level
 	var infra_bonus := floori(float(infra_total) * Constants.ADMIN_INFRA_BONUS_PER_LEVEL)
 	var stability_bonus := floori(civ.stability / Constants.ADMIN_STABILITY_DIVISOR)
-	return base + infra_bonus + stability_bonus
+	var gov_bonus := GovernanceSimulation.get_admin_bonus(civ.governance_tier)
+	var dev_tier_bonus := 0
+	for region in owned_regions:
+		dev_tier_bonus += DevelopmentTierSimulation.get_admin_bonus(region.development_tier)
+	return base + infra_bonus + stability_bonus + gov_bonus + dev_tier_bonus
 
 
 static func _overextension_penalty(region_count: int, admin_cap: int) -> float:
@@ -149,15 +157,31 @@ static func _overextension_penalty(region_count: int, admin_cap: int) -> float:
 static func _disconnected_territory_penalty(
 	civ: CivilizationData, owned_regions: Array[RegionData]
 ) -> float:
-	## Stability drain for regions not connected to the capital via owned territory.
+	## Stability drain based on supply gradient from Dijkstra routing.
+	## Cut-off regions (supply < 0.2) get full penalty.
+	## Poorly supplied regions (0.2-0.5) get partial penalty.
 	if civ.capital_region_id < 0:
 		return 0.0
 
-	var disconnected_count := 0
+	var penalty := 0.0
 	for region in owned_regions:
 		if region.id == civ.capital_region_id:
 			continue
-		if not region.is_connected_to_capital(GameState.regions, civ.capital_region_id):
-			disconnected_count += 1
+		if region.supply_value < Constants.SUPPLY_MIN_THRESHOLD:
+			penalty += Constants.SUPPLY_CUTOFF_PENALTY_PER_REGION
+		elif region.supply_value < 0.5:
+			# Partial penalty scaled by how far below 0.5
+			var severity := (0.5 - region.supply_value) / 0.3  # 0.0 at 0.5, 1.0 at 0.2
+			penalty += Constants.SUPPLY_LOW_PENALTY_PER_REGION * severity
 
-	return float(disconnected_count) * Constants.DISCONNECTED_TERRITORY_PENALTY
+	return penalty
+
+
+static func _average_infrastructure(owned_regions: Array[RegionData]) -> float:
+	## Average infrastructure level across all owned regions.
+	if owned_regions.is_empty():
+		return 0.0
+	var total := 0
+	for region in owned_regions:
+		total += region.infrastructure_level
+	return float(total) / float(owned_regions.size())
