@@ -20,8 +20,8 @@ extends Resource
 @export var development_tier: int = 0  # 0-5 (DevelopmentTier enum value)
 @export var demotion_years: int = 0  # years below threshold (hysteresis for demotion)
 @export var urbanization_level: float = 0.0  # derived from development_tier / 5.0
-@export var town_count: int = 0  # placeholder for Phase 3, 0 = no towns yet
-@export var supply_value: float = 1.0  # placeholder for Sprint G, 1.0 = full supply
+@export var towns: Array = []  # Array of TownData objects
+@export var supply_value: float = 1.0  # 1.0 = full supply
 @export var renewable_degradation: float = 0.0  # 0.0 = pristine, up to MAX_DEGRADATION
 
 
@@ -33,6 +33,7 @@ func _init(
 	id = p_id
 	region_name = p_name
 	terrain_type = p_terrain
+	towns = []  # ensure unique array per instance
 	_apply_terrain_defaults()
 	_init_resource_deposits()
 

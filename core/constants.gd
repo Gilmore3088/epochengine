@@ -359,3 +359,47 @@ const RENEWABLE_DEGRADATION_RATE := 0.02   # +2% degradation per year under extr
 const RENEWABLE_RECOVERY_RATE := 0.01      # -1% recovery per year when unowned/light extraction
 const RENEWABLE_MAX_DEGRADATION := 0.40    # cap at 40% yield reduction
 const RENEWABLE_RECOVERY_THRESHOLD := 2    # infra level at or below triggers recovery
+
+# --- Town System ---
+const TOWN_BASE_COST := 20                 # base production to found a town
+const TOWN_COST_EXPONENT := 1.5            # cost = base * (1 + existing)^exponent / size_factor
+const TOWN_MIN_POP_TO_FOUND := 500         # region needs this much pop to found a town
+const TOWN_STARTING_POP := 200             # population moved to new town from region
+const TOWN_AUTO_SPAWN_POP := 300           # min region pop to auto-spawn first town
+const TOWN_AI_INVEST_THRESHOLD := 30       # min production surplus before AI founds towns
+
+# Town names pool
+const TOWN_NAME_POOL := [
+	"Ashford", "Millbrook", "Ironhold", "Riverside", "Cliffside",
+	"Thornwick", "Goldvale", "Havenport", "Oakmere", "Stonewall",
+	"Brightwater", "Duskfield", "Frostpeak", "Greenhollow", "Shadowfen",
+	"Sunridge", "Windmere", "Copperhill", "Silverlake", "Mudshore",
+	"Ambervale", "Pinecrest", "Redmarsh", "Whitecross", "Blackthorn",
+]
+
+# --- Building System ---
+const BUILDING_BASE_COST := 10             # base production to construct a building
+const BUILDING_COST_ESCALATION := 1.3      # cost = base * escalation^count_of_same_type
+const BUILDING_MAINTENANCE_PER := 1        # production/yr maintenance per building
+
+# Building effects
+const BUILDING_GRANARY_FOOD := 2           # +food per granary
+const BUILDING_BARRACKS_DEFENSE := 0.05    # +defense per barracks
+const BUILDING_BARRACKS_MILITARY := 2.0    # +military strength per barracks
+const BUILDING_MARKET_PRODUCTION := 2      # +production per market
+const BUILDING_MARKET_STABILITY := 1.0     # +stability per market
+const BUILDING_WALLS_DEFENSE := 0.10       # +defense per walls
+const BUILDING_WORKSHOP_PRODUCTION := 3    # +production per workshop
+const BUILDING_LIBRARY_TECH := 1.0         # +tech pressure per library
+const BUILDING_MONUMENT_STABILITY := 3.0   # +stability per monument
+
+# Building names for display
+const BUILDING_NAMES := {
+	0: "Granary",
+	1: "Barracks",
+	2: "Market",
+	3: "Walls",
+	4: "Workshop",
+	5: "Library",
+	6: "Monument",
+}

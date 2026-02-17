@@ -22,7 +22,7 @@ func _init(
 	hero_name = p_name
 	type = p_type
 	owner_civ_id = p_owner
-	lifespan = randi_range(Constants.HERO_LIFESPAN_MIN, Constants.HERO_LIFESPAN_MAX)
+	lifespan = GameState.sim_rng.randi_range(Constants.HERO_LIFESPAN_MIN, Constants.HERO_LIFESPAN_MAX)
 
 
 func get_modifier_type() -> String:

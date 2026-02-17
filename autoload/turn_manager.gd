@@ -73,7 +73,10 @@ func _emit_events(events: Dictionary) -> void:
 		EventBus.stability_changed.emit(
 			change["civ_id"], change["old_stability"], change["new_stability"]
 		)
-		History.record_stability(change["civ_id"], GameState.current_year, change["new_stability"])
+
+	# Record stability for all alive civs every year (for trend accuracy)
+	for civ in GameState.get_alive_civilizations():
+		History.record_stability(civ.id, GameState.current_year, civ.stability)
 
 	# Collapses
 	for collapse in events["collapses"]:

@@ -23,11 +23,15 @@ static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
 			events.append_array(_try_invest_infrastructure(civ))
+			events.append_array(_try_found_town(civ))
+			# _try_construct_building disabled
 			events.append_array(_try_seek_alliance(civ))
 		Enums.CivState.GROWING:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
 			events.append_array(_try_invest_infrastructure(civ))
+			events.append_array(_try_found_town(civ))
+			# _try_construct_building disabled
 			events.append_array(_try_seek_alliance(civ))
 
 	return events
@@ -274,6 +278,49 @@ static func _try_seek_alliance(civ: CivilizationData) -> Array[Dictionary]:
 			}]
 
 	return []
+
+
+static func _try_found_town(civ: CivilizationData) -> Array[Dictionary]:
+	## AI founds towns in high-population regions that can afford it.
+	if civ.production_stockpile < Constants.TOWN_AI_INVEST_THRESHOLD:
+		return []
+
+	var owned_regions := GameState.get_regions_by_owner(civ.id)
+
+	for region in owned_regions:
+		if TownSimulation.can_found_town(region, civ):
+			var town: TownData = TownSimulation.found_town(region, civ)
+			if town:
+				return [{
+					"type": "town_founded",
+					"civ_id": civ.id,
+					"civ_name": civ.civ_name,
+					"region_id": region.id,
+					"region_name": region.region_name,
+					"town_name": town.town_name,
+				}]
+
+	return []
+
+
+static func _try_construct_building(_civ: CivilizationData) -> Array[Dictionary]:
+	return []  # TEMP DISABLED
+
+
+static func _pick_ai_building_type(civ: CivilizationData) -> int:
+	## Choose building type based on civ needs.
+	if civ.food_stockpile < 0:
+		return Enums.BuildingType.GRANARY
+	if civ.is_at_war():
+		if GameState.sim_rng.randf() < 0.5:
+			return Enums.BuildingType.BARRACKS
+		return Enums.BuildingType.WALLS
+	if civ.stability < 40.0:
+		return Enums.BuildingType.MONUMENT
+	# Default: economy buildings weighted by economy_bias
+	if GameState.sim_rng.randf() < civ.economy_bias:
+		return Enums.BuildingType.WORKSHOP
+	return Enums.BuildingType.MARKET
 
 
 static func _best_adjacent_tier(target: RegionData, civ_id: int) -> int:

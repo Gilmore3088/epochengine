@@ -19,6 +19,7 @@ var heroes: Dictionary = {}          # {int: HeroData}
 
 # Tracking
 var next_hero_id: int = 0
+var next_town_id: int = 0
 var turn_log: Array[Dictionary] = []  # Events logged this turn
 
 

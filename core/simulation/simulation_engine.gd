@@ -26,6 +26,7 @@ static func process_year() -> Dictionary:
 		"governance_changes": [],
 		"development_tier_changes": [],
 		"resource_events": [],
+		"town_events": [],
 	}
 
 	# Accumulator for resource stability penalties (applied in stability step)
@@ -33,6 +34,9 @@ static func process_year() -> Dictionary:
 
 	# Step 1: Population Growth
 	_step_population_growth(events)
+
+	# Step 1.3: Auto-spawn initial towns for regions that qualify
+	_step_town_auto_spawn(events)
 
 	# Step 1.5: Development Tier Evaluation
 	_step_development_tiers(events)
@@ -103,6 +107,25 @@ static func _step_population_growth(events: Dictionary) -> void:
 				})
 
 	GameState._recalculate_civ_populations()
+
+
+# --- Step 1.3: Town Auto-Spawn ---
+
+static func _step_town_auto_spawn(events: Dictionary) -> void:
+	## Auto-spawn initial towns in owned regions that have sufficient population
+	## but no towns yet. This bootstraps the town system for existing regions.
+	for civ in GameState.get_alive_civilizations():
+		for region in GameState.get_regions_by_owner(civ.id):
+			if region.towns.is_empty() and region.population >= Constants.TOWN_AUTO_SPAWN_POP:
+				var town: TownData = TownSimulation.auto_spawn_initial_town(region, civ)
+				if town:
+					events["town_events"].append({
+						"type": "town_auto_spawned",
+						"region_id": region.id,
+						"region_name": region.region_name,
+						"civ_id": civ.id,
+						"town_name": town.town_name,
+					})
 
 
 # --- Step 1.5: Development Tier Evaluation ---

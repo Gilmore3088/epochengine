@@ -37,6 +37,10 @@ static func process_queued_actions(civ: CivilizationData) -> Array[Dictionary]:
 				events.append_array(_execute_invest_infrastructure(civ, action))
 			"seek_alliance":
 				events.append_array(_execute_seek_alliance(civ, action))
+			"found_town":
+				events.append_array(_execute_found_town(civ, action))
+			"construct_building":
+				events.append_array(_execute_construct_building(civ, action))
 	_action_queue.clear()
 	return events
 
@@ -136,4 +140,57 @@ static func _execute_seek_alliance(
 		"civ_b_id": target_id,
 		"civ_a_name": civ.civ_name,
 		"civ_b_name": target.civ_name,
+	}]
+
+
+static func _execute_found_town(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var region_id: int = action.get("region_id", -1)
+	var region := GameState.get_region(region_id)
+	if not region or region.owner_id != civ.id:
+		return []
+	if not TownSimulation.can_found_town(region, civ):
+		return []
+
+	var town: TownData = TownSimulation.found_town(region, civ)
+	if not town:
+		return []
+
+	return [{
+		"type": "town_founded",
+		"civ_id": civ.id,
+		"civ_name": civ.civ_name,
+		"region_id": region.id,
+		"region_name": region.region_name,
+		"town_name": town.town_name,
+	}]
+
+
+static func _execute_construct_building(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var region_id: int = action.get("region_id", -1)
+	var town_index: int = action.get("town_index", 0)
+	var building_type: int = action.get("building_type", 0)
+
+	var region := GameState.get_region(region_id)
+	if not region or region.owner_id != civ.id:
+		return []
+	if town_index < 0 or town_index >= region.towns.size():
+		return []
+
+	var town: TownData = region.towns[town_index]
+	if not TownSimulation.construct_building(town, building_type, civ):
+		return []
+
+	var bname: String = Constants.BUILDING_NAMES.get(building_type, "Building")
+	return [{
+		"type": "building_constructed",
+		"civ_id": civ.id,
+		"civ_name": civ.civ_name,
+		"region_id": region.id,
+		"region_name": region.region_name,
+		"town_name": town.town_name,
+		"building_name": bname,
 	}]

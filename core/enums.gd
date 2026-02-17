@@ -98,3 +98,13 @@ enum MapOverlay {
 	ALLIANCES,
 	POLITICAL,
 }
+
+enum BuildingType {
+	GRANARY,
+	BARRACKS,
+	MARKET,
+	WALLS,
+	WORKSHOP,
+	LIBRARY,
+	MONUMENT,
+}

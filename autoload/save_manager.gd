@@ -36,6 +36,7 @@ func load_game(slot_name: String) -> bool:
 		push_error("Failed to load save file")
 		return false
 
+	History.clear()
 	_restore_save_data(save_data)
 	return true
 
@@ -70,6 +71,7 @@ func _create_save_data() -> Resource:
 	save.set_meta("save_version", 1)
 	save.set_meta("current_year", GameState.current_year)
 	save.set_meta("next_hero_id", GameState.next_hero_id)
+	save.set_meta("next_town_id", GameState.next_town_id)
 	save.set_meta("player_civ_id", GameState.player_civ_id)
 
 	# Serialize regions
@@ -91,7 +93,7 @@ func _create_save_data() -> Resource:
 			"demotion_years": region.demotion_years,
 			"size_factor": region.size_factor,
 			"urbanization_level": region.urbanization_level,
-			"town_count": region.town_count,
+			"towns": _serialize_towns(region.towns),
 			"supply_value": region.supply_value,
 			"resource_deposits": region.resource_deposits,
 			"extraction_years": region.extraction_years,
@@ -161,6 +163,7 @@ func _restore_save_data(save: Resource) -> void:
 	## Restore all game state from a save Resource.
 	GameState.current_year = save.get_meta("current_year")
 	GameState.next_hero_id = save.get_meta("next_hero_id")
+	GameState.next_town_id = save.get_meta("next_town_id", 0)
 	GameState.player_civ_id = save.get_meta("player_civ_id", 0)
 
 	# Restore regions
@@ -182,7 +185,7 @@ func _restore_save_data(save: Resource) -> void:
 		region.demotion_years = data.get("demotion_years", 0)
 		region.size_factor = data.get("size_factor", 1.0)
 		region.urbanization_level = data.get("urbanization_level", 0.0)
-		region.town_count = data.get("town_count", 0)
+		region.towns = _deserialize_towns(data.get("towns", []))
 		region.supply_value = data.get("supply_value", 1.0)
 		region.resource_deposits = data.get("resource_deposits", {})
 		region.extraction_years = data.get("extraction_years", 0)
@@ -241,6 +244,22 @@ func _restore_save_data(save: Resource) -> void:
 		hero.owner_civ_id = data["owner_civ_id"]
 		hero.birth_year = data["birth_year"]
 		GameState.heroes[hero.id] = hero
+
+
+func _serialize_towns(towns: Array) -> Array:
+	var result: Array[Dictionary] = []
+	for town in towns:
+		if town is TownData:
+			result.append(town.to_dict())
+	return result
+
+
+func _deserialize_towns(data: Array) -> Array:
+	var result: Array = []
+	for entry in data:
+		if entry is Dictionary:
+			result.append(TownData.from_dict(entry))
+	return result
 
 
 func _ensure_save_directory() -> void:

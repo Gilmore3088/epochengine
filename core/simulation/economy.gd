@@ -9,9 +9,15 @@ static func calculate_food_production(
 	civ: CivilizationData, owned_regions: Array[RegionData]
 ) -> int:
 	## Total food produced by all owned regions this year.
+	## Uses town aggregation when towns exist, flat yields otherwise.
 	var total := 0
 	for region in owned_regions:
-		var food := region.food_yield + region.infrastructure_level
+		var food: int
+		if not region.towns.is_empty():
+			# Town-based: sum of town food outputs + infrastructure
+			food = TownSimulation.aggregate_region_food(region) + region.infrastructure_level
+		else:
+			food = region.food_yield + region.infrastructure_level
 
 		# Scale by region size (larger regions produce more)
 		food = int(food * region.size_factor)
@@ -31,9 +37,18 @@ static func calculate_production_output(
 	civ: CivilizationData, owned_regions: Array[RegionData]
 ) -> int:
 	## Total production from all owned regions this year.
+	## Uses town aggregation when towns exist, flat yields otherwise.
+	## Building maintenance is subtracted from town-based regions.
 	var total := 0
 	for region in owned_regions:
-		var prod := region.production_yield + region.infrastructure_level
+		var prod: int
+		if not region.towns.is_empty():
+			# Town-based: sum of town production outputs + infrastructure - maintenance
+			prod = TownSimulation.aggregate_region_production(region) + region.infrastructure_level
+			prod -= TownSimulation.aggregate_region_maintenance(region)
+			prod = maxi(prod, 0)
+		else:
+			prod = region.production_yield + region.infrastructure_level
 
 		# Scale by region size (larger regions produce more)
 		prod = int(prod * region.size_factor)

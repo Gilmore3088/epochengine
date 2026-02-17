@@ -62,6 +62,10 @@ signal development_tier_changed(region_id: int, civ_id: int, old_tier: String, n
 signal resource_deposit_depleted(region_id: int, civ_id: int, resource_name: String)
 signal resource_maintenance_failure(civ_id: int, resource_name: String, missing_inputs: int)
 
+# --- Towns ---
+signal town_founded(region_id: int, town_name: String)
+signal building_constructed(region_id: int, town_name: String, building_type: String)
+
 # --- UI ---
 signal region_selected(region_id: int)
 signal region_deselected()
