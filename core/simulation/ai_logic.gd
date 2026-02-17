@@ -19,20 +19,27 @@ static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 		Enums.CivState.DECLINING:
 			events.append_array(_try_seek_peace(civ))
 			events.append_array(_try_seek_alliance(civ))
+			events.append_array(_try_declining_recovery(civ))
 		Enums.CivState.STABLE:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
 			events.append_array(_try_invest_infrastructure(civ))
 			events.append_array(_try_found_town(civ))
-			# _try_construct_building disabled
+			events.append_array(_try_construct_building(civ))
 			events.append_array(_try_seek_alliance(civ))
+			events.append_array(_try_break_alliance(civ))
 		Enums.CivState.GROWING:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
 			events.append_array(_try_invest_infrastructure(civ))
 			events.append_array(_try_found_town(civ))
-			# _try_construct_building disabled
+			events.append_array(_try_construct_building(civ))
 			events.append_array(_try_seek_alliance(civ))
+			events.append_array(_try_break_alliance(civ))
+
+	# Update strategy (research focus + spending priority) every 10 years
+	if GameState.current_year % 10 == 0:
+		_update_ai_strategy(civ, state)
 
 	return events
 
@@ -303,8 +310,29 @@ static func _try_found_town(civ: CivilizationData) -> Array[Dictionary]:
 	return []
 
 
-static func _try_construct_building(_civ: CivilizationData) -> Array[Dictionary]:
-	return []  # TEMP DISABLED
+static func _try_construct_building(civ: CivilizationData) -> Array[Dictionary]:
+	if civ.production_stockpile < Constants.TOWN_AI_INVEST_THRESHOLD:
+		return []
+
+	var owned_regions := GameState.get_regions_by_owner(civ.id)
+	for region in owned_regions:
+		if region.towns.is_empty():
+			continue
+		for town in region.towns:
+			var building_type := _pick_ai_building_type(civ)
+			if TownSimulation.can_construct_building(town, building_type, civ):
+				if TownSimulation.construct_building(town, building_type, civ):
+					var bname: String = Constants.BUILDING_NAMES.get(building_type, "Building")
+					return [{
+						"type": "building_constructed",
+						"civ_id": civ.id,
+						"civ_name": civ.civ_name,
+						"region_id": region.id,
+						"region_name": region.region_name,
+						"town_name": town.town_name,
+						"building_name": bname,
+					}]
+	return []
 
 
 static func _pick_ai_building_type(civ: CivilizationData) -> int:
@@ -317,6 +345,13 @@ static func _pick_ai_building_type(civ: CivilizationData) -> int:
 		return Enums.BuildingType.WALLS
 	if civ.stability < 40.0:
 		return Enums.BuildingType.MONUMENT
+	# Tech pressure: build Library when tech count is low for current era
+	if civ.technologies.size() < _era_tech_threshold(civ.current_era):
+		if GameState.sim_rng.randf() < 0.15:
+			return Enums.BuildingType.LIBRARY
+	# Small chance to build Town Hall for workforce management
+	if GameState.sim_rng.randf() < 0.10:
+		return Enums.BuildingType.TOWN_HALL
 	# Default: economy buildings weighted by economy_bias
 	if GameState.sim_rng.randf() < civ.economy_bias:
 		return Enums.BuildingType.WORKSHOP
@@ -347,10 +382,153 @@ static func _best_adjacent_supply(target: RegionData, civ_id: int) -> float:
 	return SupplySystem.get_best_adjacent_supply(target, civ_id)
 
 
+static func _try_break_alliance(civ: CivilizationData) -> Array[Dictionary]:
+	## Consider breaking alliances with unstable or problematic allies.
+	if civ.alliance_partners.is_empty():
+		return []
+
+	for ally_id in civ.alliance_partners.duplicate():
+		var ally := GameState.get_civilization(ally_id)
+		if not ally:
+			continue
+
+		var should_consider := false
+		# Break if ally stability is critically low
+		if ally.stability < 30.0:
+			should_consider = true
+		# Break if ally is at war with one of our other allies
+		for other_ally_id in civ.alliance_partners:
+			if other_ally_id != ally_id and ally.war_targets.has(other_ally_id):
+				should_consider = true
+				break
+
+		if should_consider and GameState.sim_rng.randf() < 0.05:
+			civ.alliance_partners.erase(ally_id)
+			ally.alliance_partners.erase(civ.id)
+			return [{
+				"type": "alliance_broken",
+				"civ_a_id": civ.id,
+				"civ_b_id": ally_id,
+				"civ_a_name": civ.civ_name,
+				"civ_b_name": ally.civ_name,
+			}]
+
+	return []
+
+
+static func _try_declining_recovery(civ: CivilizationData) -> Array[Dictionary]:
+	## DECLINING state: invest in infrastructure or build granaries to recover.
+	# Invest in infrastructure with low bar (10% chance if stockpile > 50)
+	if civ.production_stockpile > 50 and GameState.sim_rng.randf() < 0.10:
+		var owned_regions := GameState.get_regions_by_owner(civ.id)
+		for region in owned_regions:
+			if EconomySimulation.try_upgrade_infrastructure(civ, region):
+				return [{
+					"type": "infrastructure_upgrade",
+					"civ_id": civ.id,
+					"civ_name": civ.civ_name,
+					"region_id": region.id,
+					"region_name": region.region_name,
+					"new_level": region.infrastructure_level,
+				}]
+
+	# Build granary in towns if food deficit
+	if civ.food_stockpile < 0:
+		var owned_regions := GameState.get_regions_by_owner(civ.id)
+		for region in owned_regions:
+			for town in region.towns:
+				if TownSimulation.can_construct_building(town, Enums.BuildingType.GRANARY, civ):
+					if TownSimulation.construct_building(town, Enums.BuildingType.GRANARY, civ):
+						return [{
+							"type": "building_constructed",
+							"civ_id": civ.id,
+							"civ_name": civ.civ_name,
+							"region_id": region.id,
+							"region_name": region.region_name,
+							"town_name": town.town_name,
+							"building_name": "Granary",
+						}]
+
+	return []
+
+
+static func _era_tech_threshold(era: int) -> int:
+	## Returns tech count threshold below which AI should invest in Libraries.
+	match era:
+		Enums.Epoch.PREHISTORIC: return 2
+		Enums.Epoch.CLASSICAL: return 5
+		Enums.Epoch.INDUSTRIAL: return 8
+		Enums.Epoch.FUTURE: return 12
+	return 2
+
+
+static func _update_ai_strategy(civ: CivilizationData, state: int) -> void:
+	## Set research focus and spending priority based on civ state and bias profile.
+	# Research focus (only change if off cooldown)
+	if civ.research_focus_cooldown <= 0:
+		var new_focus := 0  # Balanced
+		match state:
+			Enums.CivState.GROWING:
+				# Prioritize Knowledge or Economic based on tech deficit
+				if civ.technologies.size() < _era_tech_threshold(civ.current_era):
+					new_focus = 1  # Knowledge
+				else:
+					new_focus = 4  # Economic
+			Enums.CivState.DECLINING:
+				# Shore up weak areas
+				if civ.is_at_war():
+					new_focus = 5  # Military
+				else:
+					new_focus = 3  # Social (stability helps recovery)
+			Enums.CivState.STABLE:
+				# Use bias profile
+				var roll := GameState.sim_rng.randf()
+				if civ.aggression_bias > 0.7 and roll < 0.4:
+					new_focus = 5  # Military
+				elif civ.economy_bias > 0.7 and roll < 0.6:
+					new_focus = 4  # Economic
+				elif civ.expansion_bias > 0.7 and roll < 0.7:
+					new_focus = 2  # Energy
+				elif roll < 0.3:
+					new_focus = 1  # Knowledge
+				# else stays 0 (Balanced)
+		if new_focus != civ.research_focus:
+			civ.research_focus = new_focus
+			civ.research_focus_cooldown = Constants.RESEARCH_FOCUS_COOLDOWN_YEARS
+
+	# Spending priority (only change if off cooldown)
+	if civ.spending_priority_cooldown <= 0:
+		var new_priority := 0  # Balanced
+		match state:
+			Enums.CivState.DECLINING:
+				if civ.food_stockpile < 0:
+					new_priority = 1  # Growth
+				elif civ.is_at_war():
+					new_priority = 3  # Military
+			Enums.CivState.GROWING:
+				if civ.economy_bias > 0.6:
+					new_priority = 2  # Production
+				else:
+					new_priority = 1  # Growth
+			Enums.CivState.STABLE:
+				var roll := GameState.sim_rng.randf()
+				if civ.aggression_bias > 0.7 and roll < 0.4:
+					new_priority = 3  # Military
+				elif civ.economy_bias > 0.7 and roll < 0.5:
+					new_priority = 2  # Production
+				elif civ.expansion_bias > 0.7 and roll < 0.5:
+					new_priority = 1  # Growth
+				# else stays 0 (Balanced)
+		if new_priority != civ.spending_priority:
+			civ.spending_priority = new_priority
+			civ.spending_priority_cooldown = Constants.SPENDING_PRIORITY_COOLDOWN_YEARS
+
+
 static func _resource_value(region: RegionData) -> int:
 	## Estimates total resource value of a region (deposits + terrain yields).
 	var value := 0
 	for res_type in region.resource_deposits:
+		@warning_ignore("integer_division")
 		value += region.resource_deposits[res_type] / 100  # normalize large deposit values
 	var terrain_key: int = region.terrain_type
 	if Constants.RESOURCE_TERRAIN_YIELDS.has(terrain_key):

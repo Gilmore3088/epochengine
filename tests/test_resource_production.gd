@@ -388,3 +388,32 @@ func test_is_resource_unlocked() -> void:
 		"Data should be locked in Industrial")
 	assert_true(ResourceProduction.is_resource_unlocked(Enums.ResourceType.DATA, Enums.Epoch.FUTURE),
 		"Data should be unlocked in Future")
+
+
+# === POST-LOAD DEPOSIT INITIALIZATION TESTS ===
+
+func test_loaded_region_gets_deposits_after_init() -> void:
+	# Simulate .tres load: _init() with defaults, then overwrite terrain/id
+	var region := RegionData.new()  # defaults: id=-1, terrain=PLAINS
+	region.id = 42
+	region.terrain_type = Enums.TerrainType.MOUNTAINS
+	# Deposits are empty because _init used PLAINS defaults
+	assert_true(region.resource_deposits.is_empty(),
+		"Deposits should be empty after default _init")
+	# Post-load re-initialization
+	region.initialize_deposits()
+	assert_false(region.resource_deposits.is_empty(),
+		"Mountains region should have deposits after initialize_deposits()")
+	assert_true(region.resource_deposits.has(Enums.ResourceType.FUELS),
+		"Mountains should have fuel deposits")
+
+
+func test_initialize_deposits_is_idempotent() -> void:
+	# RegionData.new with params initializes deposits correctly
+	var region := RegionData.new(42, "Mountains", Enums.TerrainType.MOUNTAINS)
+	var original_deposits := region.resource_deposits.duplicate()
+	assert_false(original_deposits.is_empty(), "Should have deposits from _init")
+	# Calling initialize_deposits again should be a no-op (guard check)
+	region.initialize_deposits()
+	assert_eq(region.resource_deposits, original_deposits,
+		"Re-calling initialize_deposits should not change existing deposits")

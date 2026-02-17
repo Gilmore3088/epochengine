@@ -124,3 +124,13 @@ static func style_label_stat(lbl: Label, size: int = 15, color: Color = PARCHMEN
 	lbl.add_theme_font_override("font", get_body_bold_font())
 	lbl.add_theme_font_size_override("font_size", size)
 	lbl.add_theme_color_override("font_color", color)
+
+
+static func make_tooltip_style() -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.06, 0.05, 0.08, 0.95)
+	sb.border_color = GOLD_DIM
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(8)
+	return sb

@@ -183,3 +183,26 @@ func test_reformer_hero_boosts_stability() -> void:
 		"Reformer hero should boost stability")
 
 	GameState.heroes.clear()
+
+
+# --- Town Stability Integration ---
+
+func test_town_stability_bonus_wired_in() -> void:
+	var civ := _make_civ(50.0, 0, 5000)
+	var region := _make_region(0, 0)
+	var regions: Array[RegionData] = [region]
+
+	GameState.set_sim_seed(42)
+	var s_no_town := StabilitySimulation.recalculate(civ, regions)
+
+	# Add town with Monument (+3 stability)
+	civ.stability = 50.0
+	var town := TownData.new(0, "TestTown", 0)
+	town.add_building(Enums.BuildingType.MONUMENT)
+	region.towns = [town]
+
+	GameState.set_sim_seed(42)
+	var s_with_town := StabilitySimulation.recalculate(civ, regions)
+
+	assert_true(s_with_town > s_no_town,
+		"Town with Monument should boost stability")

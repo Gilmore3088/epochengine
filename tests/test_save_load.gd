@@ -328,3 +328,23 @@ func test_save_list_contains_slot() -> void:
 	SaveManager.save_game(TEST_SLOT)
 	var saves := SaveManager.get_save_list()
 	assert_true(TEST_SLOT in saves, "Save list should contain test slot")
+
+
+func test_save_manager_get_save_list_multiple() -> void:
+	_setup_known_state()
+	SaveManager.save_game("test_multi_1")
+	SaveManager.save_game("test_multi_2")
+	var saves := SaveManager.get_save_list()
+	assert_true("test_multi_1" in saves, "Save list should contain first slot")
+	assert_true("test_multi_2" in saves, "Save list should contain second slot")
+	# Cleanup
+	SaveManager.delete_save("test_multi_1")
+	SaveManager.delete_save("test_multi_2")
+
+
+func test_save_manager_autosave_name() -> void:
+	_setup_known_state()
+	SaveManager.save_game("autosave_1")
+	var saves := SaveManager.get_save_list()
+	assert_true("autosave_1" in saves, "Autosave slot should be in save list")
+	SaveManager.delete_save("autosave_1")

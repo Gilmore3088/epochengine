@@ -239,3 +239,41 @@ func test_upgrade_infrastructure_too_expensive() -> void:
 	region.infrastructure_level = 3
 	# Cost: 15 * (3+1) = 60, only has 10
 	assert_false(EconomySimulation.try_upgrade_infrastructure(civ, region))
+
+
+# --- Spending Priority ---
+
+func test_spending_growth_boosts_food() -> void:
+	var civ := _make_civ(0, 0, 50.0, 3000)
+	civ.spending_priority = 1  # Growth: food 1.5
+	var regions: Array[RegionData] = [
+		_make_region(Enums.TerrainType.RIVER_BASIN),  # 5 food, 3 prod
+	]
+	var result := EconomySimulation.process_economy(civ, regions)
+	# Food net: 5 - 1 (3000/2000) = 4. * 1.5 = 6.0 -> int 6
+	assert_eq(civ.food_stockpile, int(4.0 * 1.5), "Growth priority should boost food accumulation")
+
+	var civ_balanced := _make_civ(0, 0, 50.0, 3000)
+	civ_balanced.spending_priority = 0  # Balanced
+	EconomySimulation.process_economy(civ_balanced, regions)
+	assert_true(civ.food_stockpile > civ_balanced.food_stockpile,
+		"Growth food (%d) should exceed Balanced food (%d)" % [civ.food_stockpile, civ_balanced.food_stockpile])
+
+
+func test_spending_production_reduces_food() -> void:
+	var civ := _make_civ(0, 0, 50.0, 3000)
+	civ.spending_priority = 2  # Production: food 0.85
+	var regions: Array[RegionData] = [
+		_make_region(Enums.TerrainType.RIVER_BASIN),  # 5 food
+	]
+	var result := EconomySimulation.process_economy(civ, regions)
+	# Food net: 4. * 0.85 = 3.4 -> int 3
+	assert_eq(civ.food_stockpile, int(4.0 * 0.85), "Production priority should reduce food")
+
+
+func test_spending_cooldown_decrements() -> void:
+	var civ := _make_civ(100, 100, 50.0, 3000)
+	civ.spending_priority_cooldown = 3
+	var regions: Array[RegionData] = [_make_region(Enums.TerrainType.PLAINS)]
+	EconomySimulation.process_economy(civ, regions)
+	assert_eq(civ.spending_priority_cooldown, 2, "Cooldown should decrement by 1")

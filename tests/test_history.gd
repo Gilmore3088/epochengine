@@ -24,9 +24,12 @@ func _empty_events() -> Dictionary:
 		"golden_age_starts": [],
 		"golden_age_ends": [],
 		"tech_emergences": [],
+		"era_changes": [],
 		"governance_changes": [],
 		"development_tier_changes": [],
 		"resource_events": [],
+		"town_events": [],
+		"victory_events": [],
 	}
 
 

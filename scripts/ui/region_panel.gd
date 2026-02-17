@@ -31,6 +31,8 @@ var infrastructure_label: Label
 var dev_tier_label: Label
 var pop_density_label: Label
 var resources_label: Label
+var resources_header: Label
+var supply_label: Label
 
 # Action elements
 var actions_container: VBoxContainer
@@ -38,8 +40,16 @@ var upgrade_btn: Button
 var war_btn: Button
 var peace_btn: Button
 var alliance_btn: Button
+var claim_btn: Button
 var queued_label: Label
 var queued_timer: float = 0.0
+
+# Town section
+var towns_container: VBoxContainer
+var found_town_btn: Button
+
+# Tier progress ("Almost There")
+var tier_progress_container: VBoxContainer
 
 # Visual elements
 var header_bar: PanelContainer
@@ -149,7 +159,7 @@ func _build_ui() -> void:
 	divider.custom_minimum_size = Vector2(0, 1)
 	outer_vbox.add_child(divider)
 
-	# -- Body content area --
+	# -- Body content area (scrollable) --
 	var body := MarginContainer.new()
 	body.add_theme_constant_override("margin_left", 14)
 	body.add_theme_constant_override("margin_right", 14)
@@ -159,10 +169,12 @@ func _build_ui() -> void:
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 4)
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	body.add_child(vbox)
 
 	# -- Identity section --
 	terrain_label = _add_info_row(vbox, "Terrain", "--")
+	terrain_label.tooltip_text = "Terrain affects food, production,\ndefense, and supply cost."
 	owner_label = _add_info_row(vbox, "Owner", "--")
 	population_label = _add_info_row(vbox, "Population", "--")
 
@@ -180,7 +192,11 @@ func _build_ui() -> void:
 	food_label = _add_stat_row(vbox, "Food", "--", UITheme.COLOR_FOOD)
 	production_label = _add_stat_row(vbox, "Production", "--", UITheme.COLOR_PRODUCTION)
 	defense_label = _add_stat_row(vbox, "Defense", "--", Color(0.55, 0.55, 0.78))
+	defense_label.tooltip_text = "Defense modifier for battles.\nAffected by terrain and dev tier."
 	infrastructure_label = _add_stat_row(vbox, "Infrastructure", "--", UITheme.PARCHMENT_DIM)
+	infrastructure_label.tooltip_text = "Infrastructure level (0-5).\nIncreases yields, reduces supply costs.\nUpgrade with production stockpile."
+	supply_label = _add_stat_row(vbox, "Supply", "--", UITheme.PARCHMENT_DIM)
+	supply_label.tooltip_text = "Supply efficiency from capital.\nAffects town output and reinforcement.\n100% = full, <50% = penalties."
 
 	# -- Development section --
 	_add_separator(vbox)
@@ -193,17 +209,19 @@ func _build_ui() -> void:
 	_section_labels.append(dev_header)
 
 	dev_tier_label = _add_stat_row(vbox, "Tier", "--", Color(0.65, 0.55, 0.85))
+	dev_tier_label.tooltip_text = "Development Tier: Wild (0) to Advanced (5).\nHigher tiers boost economy and defense.\nRequires infra, population, stability, era."
 	pop_density_label = _add_stat_row(vbox, "Pop. Density", "--", UITheme.PARCHMENT_DIM)
+	pop_density_label.tooltip_text = "Population as percentage of terrain capacity.\nHigher density required for tier promotion."
 
 	# -- Resources section --
 	_add_separator(vbox)
 
-	var res_header := Label.new()
-	res_header.text = "RESOURCES"
-	UITheme.style_label_body(res_header, FONT_SECTION, UITheme.GOLD_DIM)
-	res_header.add_theme_constant_override("margin_top", 2)
-	vbox.add_child(res_header)
-	_section_labels.append(res_header)
+	resources_header = Label.new()
+	resources_header.text = "RESOURCES"
+	UITheme.style_label_body(resources_header, FONT_SECTION, UITheme.GOLD_DIM)
+	resources_header.add_theme_constant_override("margin_top", 2)
+	vbox.add_child(resources_header)
+	_section_labels.append(resources_header)
 
 	resources_label = Label.new()
 	resources_label.text = ""
@@ -211,6 +229,41 @@ func _build_ui() -> void:
 	UITheme.style_label_body(resources_label, FONT_BODY, UITheme.PARCHMENT_DIM)
 	vbox.add_child(resources_label)
 	_body_labels.append(resources_label)
+
+	# -- Towns section --
+	_add_separator(vbox)
+
+	var towns_header := Label.new()
+	towns_header.text = "TOWNS"
+	UITheme.style_label_body(towns_header, FONT_SECTION, UITheme.GOLD_DIM)
+	towns_header.add_theme_constant_override("margin_top", 2)
+	vbox.add_child(towns_header)
+	_section_labels.append(towns_header)
+
+	towns_container = VBoxContainer.new()
+	towns_container.add_theme_constant_override("separation", 2)
+	vbox.add_child(towns_container)
+
+	found_town_btn = Button.new()
+	found_town_btn.text = "Found Town"
+	UITheme.style_button(found_town_btn)
+	found_town_btn.visible = false
+	found_town_btn.pressed.connect(_on_found_town_pressed)
+	vbox.add_child(found_town_btn)
+
+	# -- Tier progress ("Almost There") --
+	_add_separator(vbox)
+
+	var progress_header := Label.new()
+	progress_header.text = "NEXT TIER"
+	UITheme.style_label_body(progress_header, FONT_SECTION, UITheme.GOLD_DIM)
+	progress_header.add_theme_constant_override("margin_top", 2)
+	vbox.add_child(progress_header)
+	_section_labels.append(progress_header)
+
+	tier_progress_container = VBoxContainer.new()
+	tier_progress_container.add_theme_constant_override("separation", 1)
+	vbox.add_child(tier_progress_container)
 
 	# -- Actions --
 	_add_separator(vbox)
@@ -245,6 +298,13 @@ func _build_ui() -> void:
 	alliance_btn.visible = false
 	alliance_btn.pressed.connect(_on_alliance_pressed)
 	actions_container.add_child(alliance_btn)
+
+	claim_btn = Button.new()
+	claim_btn.text = "Claim Region"
+	UITheme.style_button(claim_btn)
+	claim_btn.visible = false
+	claim_btn.pressed.connect(_on_claim_pressed)
+	actions_container.add_child(claim_btn)
 
 	queued_label = Label.new()
 	queued_label.text = "Queued! Press Next Year to execute."
@@ -321,19 +381,24 @@ func _apply_scale() -> void:
 	var new_width := clampf(BASE_WIDTH * ui_scale, 220.0, max_width)
 	custom_minimum_size.x = new_width
 
-	# Scale all tracked labels
+	# Scale all tracked labels (skip freed instances from dynamic rebuilds)
 	for lbl in _header_labels:
-		lbl.add_theme_font_size_override("font_size", int(FONT_HEADER * ui_scale))
+		if is_instance_valid(lbl):
+			lbl.add_theme_font_size_override("font_size", int(FONT_HEADER * ui_scale))
 	for lbl in _body_labels:
-		lbl.add_theme_font_size_override("font_size", int(FONT_BODY * ui_scale))
+		if is_instance_valid(lbl):
+			lbl.add_theme_font_size_override("font_size", int(FONT_BODY * ui_scale))
 	for lbl in _stat_labels:
-		lbl.add_theme_font_size_override("font_size", int(FONT_STAT * ui_scale))
+		if is_instance_valid(lbl):
+			lbl.add_theme_font_size_override("font_size", int(FONT_STAT * ui_scale))
 	for lbl in _section_labels:
-		lbl.add_theme_font_size_override("font_size", int(FONT_SECTION * ui_scale))
+		if is_instance_valid(lbl):
+			lbl.add_theme_font_size_override("font_size", int(FONT_SECTION * ui_scale))
 
 	# Scale button font sizes
-	for btn in [upgrade_btn, war_btn, peace_btn, alliance_btn]:
-		btn.add_theme_font_size_override("font_size", int(FONT_BUTTON * ui_scale))
+	for btn in [upgrade_btn, war_btn, peace_btn, alliance_btn, claim_btn]:
+		if is_instance_valid(btn):
+			btn.add_theme_font_size_override("font_size", int(FONT_BUTTON * ui_scale))
 
 	# Keep panel on screen after resize
 	call_deferred("_clamp_to_viewport")
@@ -429,6 +494,16 @@ func _update_display() -> void:
 	if not region:
 		return
 
+	var vis := GameState.get_player_visibility(region.id)
+
+	if vis == Enums.VisibilityState.HIDDEN:
+		_show_hidden_display(region)
+		return
+
+	if vis == Enums.VisibilityState.EXPLORED:
+		_show_explored_display(region)
+		return
+
 	name_label.text = region.region_name
 
 	var terrain_names := {
@@ -455,6 +530,16 @@ func _update_display() -> void:
 	production_label.text = "%d" % region.production_yield
 	defense_label.text = "%.1fx" % region.defense_modifier
 	infrastructure_label.text = "%d / %d" % [region.infrastructure_level, Constants.INFRASTRUCTURE_MAX_LEVEL]
+
+	# Supply efficiency
+	var supply_pct := region.supply_value * 100.0
+	supply_label.text = "%d%%" % int(supply_pct)
+	if supply_pct >= 80.0:
+		supply_label.add_theme_color_override("font_color", UITheme.COLOR_STABILITY_HIGH)
+	elif supply_pct >= 50.0:
+		supply_label.add_theme_color_override("font_color", UITheme.COLOR_STABILITY_MID)
+	else:
+		supply_label.add_theme_color_override("font_color", UITheme.COLOR_STABILITY_LOW)
 
 	# Development tier info
 	dev_tier_label.text = DevelopmentTierSimulation.get_tier_name(region.development_tier)
@@ -495,9 +580,17 @@ func _update_display() -> void:
 	if res_parts.is_empty():
 		resources_label.text = ""
 		resources_label.visible = false
+		resources_header.visible = false
 	else:
 		resources_label.text = "\n".join(res_parts)
 		resources_label.visible = true
+		resources_header.visible = true
+
+	# Towns display
+	_update_towns_display(region)
+
+	# Tier progress ("Almost There")
+	_update_tier_progress(region)
 
 	# Action buttons
 	var player_civ := GameState.get_player_civ()
@@ -508,6 +601,8 @@ func _update_display() -> void:
 	war_btn.visible = false
 	peace_btn.visible = false
 	alliance_btn.visible = false
+	claim_btn.visible = false
+	found_town_btn.visible = false
 
 	if not player_civ or player_civ.is_collapsed:
 		return
@@ -520,6 +615,25 @@ func _update_display() -> void:
 			var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * (region.infrastructure_level + 1)
 			upgrade_btn.text = "Upgrade Infrastructure (-%d prod)" % cost
 			upgrade_btn.disabled = player_civ.production_stockpile < cost
+		# Found town button (in actions area, separate from towns_container)
+		if TownSimulation.can_found_town(region, player_civ):
+			var town_cost := TownSimulation.calculate_town_cost(region)
+			found_town_btn.text = "Found Town (-%d prod)" % town_cost
+			found_town_btn.visible = true
+			found_town_btn.disabled = player_civ.production_stockpile < town_cost
+	elif region.is_neutral():
+		# Neutral region - show claim if adjacent to player territory AND visible
+		if vis == Enums.VisibilityState.VISIBLE and _is_adjacent_to_player(region):
+			var region_count := GameState.get_regions_by_owner(player_civ.id).size()
+			var cost := EconomySimulation.calculate_expansion_cost(player_civ, region_count)
+			var can_afford := EconomySimulation.can_afford_expansion(player_civ, region_count)
+			claim_btn.text = "Claim Region (-%d prod)" % cost
+			claim_btn.visible = true
+			claim_btn.disabled = not can_afford
+			if not can_afford:
+				claim_btn.tooltip_text = "Need %d production (have %d)" % [cost, player_civ.production_stockpile]
+			else:
+				claim_btn.tooltip_text = "Sends settlers from your nearest region"
 	elif region.owner_id >= 0:
 		# Region belongs to another civ - show diplomacy actions
 		var owner_civ := GameState.get_civilization(region.owner_id)
@@ -534,6 +648,73 @@ func _update_display() -> void:
 				if not player_civ.alliance_partners.has(owner_id):
 					alliance_btn.text = "Propose Alliance with %s" % owner_civ.civ_name
 					alliance_btn.visible = true
+
+
+func _show_hidden_display(region: RegionData) -> void:
+	## Show minimal info for unknown territory (HIDDEN fog state).
+	name_label.text = "Unknown Territory"
+	terrain_label.text = "???"
+	owner_label.text = "???"
+	population_label.text = "???"
+	food_label.text = "?"
+	production_label.text = "?"
+	defense_label.text = "?"
+	infrastructure_label.text = "?"
+	supply_label.text = "?"
+	dev_tier_label.text = "?"
+	pop_density_label.text = "?"
+	resources_label.text = ""
+	resources_label.visible = false
+	resources_header.visible = false
+	for child in towns_container.get_children():
+		child.queue_free()
+	for child in tier_progress_container.get_children():
+		child.queue_free()
+	upgrade_btn.visible = false
+	war_btn.visible = false
+	peace_btn.visible = false
+	alliance_btn.visible = false
+	claim_btn.visible = false
+	found_town_btn.visible = false
+
+
+func _show_explored_display(region: RegionData) -> void:
+	## Show terrain and yields only for explored-but-not-visible regions.
+	var terrain_names := {
+		Enums.TerrainType.RIVER_BASIN: "River Basin",
+		Enums.TerrainType.PLAINS: "Plains",
+		Enums.TerrainType.MOUNTAINS: "Mountains",
+		Enums.TerrainType.DESERT: "Desert",
+		Enums.TerrainType.JUNGLE: "Jungle",
+		Enums.TerrainType.COASTLINE: "Coastline",
+		Enums.TerrainType.TUNDRA: "Tundra",
+		Enums.TerrainType.STEPPE: "Steppe",
+		Enums.TerrainType.VOLCANIC_RIDGE: "Volcanic Ridge",
+	}
+	name_label.text = region.region_name
+	terrain_label.text = terrain_names.get(region.terrain_type, "Unknown")
+	owner_label.text = "Beyond your borders"
+	population_label.text = "???"
+	food_label.text = "%d" % region.food_yield
+	production_label.text = "%d" % region.production_yield
+	defense_label.text = "%.1fx" % region.defense_modifier
+	infrastructure_label.text = "???"
+	supply_label.text = "???"
+	dev_tier_label.text = "???"
+	pop_density_label.text = "???"
+	resources_label.text = ""
+	resources_label.visible = false
+	resources_header.visible = false
+	for child in towns_container.get_children():
+		child.queue_free()
+	for child in tier_progress_container.get_children():
+		child.queue_free()
+	upgrade_btn.visible = false
+	war_btn.visible = false
+	peace_btn.visible = false
+	alliance_btn.visible = false
+	claim_btn.visible = false
+	found_town_btn.visible = false
 
 
 func _on_turn_ended(_year: int) -> void:
@@ -622,6 +803,29 @@ func _on_alliance_pressed() -> void:
 	alliance_btn.disabled = true
 
 
+func _on_claim_pressed() -> void:
+	if current_region_id < 0:
+		return
+	PlayerActions.queue_action({
+		"type": "claim_region",
+		"region_id": current_region_id,
+	})
+	EventBus.player_action_queued.emit("claim_region", {"region_id": current_region_id})
+	_show_queued_feedback()
+	claim_btn.disabled = true
+
+
+func _is_adjacent_to_player(region: RegionData) -> bool:
+	var player_civ := GameState.get_player_civ()
+	if not player_civ:
+		return false
+	for neighbor_id in region.adjacency_list:
+		var neighbor := GameState.get_region(neighbor_id)
+		if neighbor and neighbor.owner_id == player_civ.id:
+			return true
+	return false
+
+
 func _show_queued_feedback() -> void:
 	queued_label.visible = true
 	queued_timer = 3.0
@@ -634,3 +838,342 @@ static func _format_number(n: int) -> String:
 		return "%.1fK" % (float(n) / 1000.0)
 	else:
 		return str(n)
+
+
+# ==================== TOWN DISPLAY ====================
+
+func _update_towns_display(region: RegionData) -> void:
+	for child in towns_container.get_children():
+		child.queue_free()
+
+	if region.towns.is_empty():
+		var no_towns := Label.new()
+		if region.owner_id == GameState.player_civ_id:
+			if region.population >= Constants.TOWN_MIN_POP_TO_FOUND:
+				no_towns.text = "Ready to found a town!"
+				UITheme.style_label_body(no_towns, FONT_BODY, Color(0.5, 0.78, 0.42))
+			else:
+				no_towns.text = "Need %d+ pop to found (have %s)" % [
+					Constants.TOWN_MIN_POP_TO_FOUND, _format_number(region.population)]
+				UITheme.style_label_body(no_towns, FONT_BODY, UITheme.PARCHMENT_DIM)
+		else:
+			no_towns.text = "No towns"
+			UITheme.style_label_body(no_towns, FONT_BODY, UITheme.PARCHMENT_DIM)
+		towns_container.add_child(no_towns)
+		_body_labels.append(no_towns)
+		return
+
+	var is_player_owned := region.owner_id == GameState.player_civ_id
+	var player_civ := GameState.get_player_civ()
+
+	for i in range(region.towns.size()):
+		var town: TownData = region.towns[i]
+		var town_box := VBoxContainer.new()
+		town_box.add_theme_constant_override("separation", 1)
+
+		# Town name + population + Details button
+		var header_row := HBoxContainer.new()
+		header_row.add_theme_constant_override("separation", 4)
+		var header := Label.new()
+		header.text = "%s (pop %s)" % [town.town_name, _format_number(town.population)]
+		UITheme.style_label_stat(header, FONT_STAT, UITheme.PARCHMENT)
+		header.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		header_row.add_child(header)
+		if is_player_owned:
+			var detail_btn := Button.new()
+			detail_btn.text = "Details"
+			UITheme.style_button(detail_btn)
+			detail_btn.add_theme_font_size_override("font_size", int(10 * ui_scale))
+			detail_btn.pressed.connect(func(): EventBus.open_town_detail.emit(region.id, i))
+			header_row.add_child(detail_btn)
+		town_box.add_child(header_row)
+
+		# Buildings summary
+		var bldg_parts: Array[String] = []
+		for entry in town.buildings:
+			var btype: int = entry.get("type", -1)
+			var bcount: int = entry.get("count", 0)
+			if bcount > 0:
+				var bname: String = Constants.BUILDING_NAMES.get(btype, "?")
+				bldg_parts.append("%s x%d" % [bname, bcount])
+		if not bldg_parts.is_empty():
+			var bldg_label := Label.new()
+			bldg_label.text = "  " + ", ".join(bldg_parts)
+			UITheme.style_label_body(bldg_label, FONT_BODY, UITheme.PARCHMENT_DIM)
+			bldg_label.autowrap_mode = TextServer.AUTOWRAP_WORD
+			town_box.add_child(bldg_label)
+
+		# Output breakdown
+		var outputs := TownSimulation.compute_town_outputs(town, region)
+		_add_town_output_breakdown(town_box, outputs)
+
+		# Specialization label (non-player towns with buildings)
+		if not is_player_owned and not town.buildings.is_empty():
+			var spec := _get_town_specialization(town)
+			if spec != "":
+				var spec_label := Label.new()
+				spec_label.text = "  Focus: %s" % spec
+				UITheme.style_label_body(spec_label, FONT_BODY, UITheme.GOLD_DIM)
+				town_box.add_child(spec_label)
+
+		# Recommended actions (player-owned only)
+		if is_player_owned and player_civ and not player_civ.is_collapsed:
+			_add_recommended_actions(town_box, town, region, player_civ)
+
+			var build_row := HBoxContainer.new()
+			build_row.add_theme_constant_override("separation", 4)
+
+			var option := OptionButton.new()
+			for btype in Constants.BUILDING_NAMES:
+				var bname: String = Constants.BUILDING_NAMES[btype]
+				var cost := TownSimulation.calculate_building_cost(town, btype)
+				option.add_item("%s (%d)" % [bname, cost], btype)
+			option.add_theme_font_size_override("font_size", int(11 * ui_scale))
+			option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			build_row.add_child(option)
+
+			var build_btn := Button.new()
+			build_btn.text = "Build"
+			UITheme.style_button(build_btn)
+			build_btn.add_theme_font_size_override("font_size", int(11 * ui_scale))
+			build_btn.pressed.connect(
+				_on_construct_building_pressed.bind(region.id, i, option)
+			)
+			build_row.add_child(build_btn)
+
+			town_box.add_child(build_row)
+
+		towns_container.add_child(town_box)
+
+	# Town capacity hint (player-owned only)
+	if is_player_owned and region.population >= Constants.TOWN_MIN_POP_TO_FOUND:
+		@warning_ignore("integer_division")
+		var potential := region.population / Constants.TOWN_MIN_POP_TO_FOUND
+		if potential > region.towns.size():
+			var hint := Label.new()
+			hint.text = "Pop supports %d towns (have %d)" % [potential, region.towns.size()]
+			UITheme.style_label_body(hint, FONT_SECTION, UITheme.PARCHMENT_DIM)
+			towns_container.add_child(hint)
+			_section_labels.append(hint)
+
+
+func _on_found_town_pressed() -> void:
+	if current_region_id < 0:
+		return
+	PlayerActions.queue_action({
+		"type": "found_town",
+		"region_id": current_region_id,
+	})
+	EventBus.player_action_queued.emit("found_town", {"region_id": current_region_id})
+	_show_queued_feedback()
+	found_town_btn.disabled = true
+
+
+func _on_construct_building_pressed(region_id: int, town_index: int, option: OptionButton) -> void:
+	var building_type: int = option.get_selected_id()
+	PlayerActions.queue_action({
+		"type": "construct_building",
+		"region_id": region_id,
+		"town_index": town_index,
+		"building_type": building_type,
+	})
+	EventBus.player_action_queued.emit("construct_building", {
+		"region_id": region_id, "town_index": town_index, "building_type": building_type,
+	})
+	_show_queued_feedback()
+
+
+func _add_town_output_breakdown(parent: VBoxContainer, outputs: Dictionary) -> void:
+	var supply_pct := int(outputs["supply_efficiency"] * 100.0)
+	var supply_tag := "" if supply_pct >= 100 else " x%d%%" % supply_pct
+
+	# Food line
+	var food_text := "  Food: %d base + %d bldg%s = %d" % [
+		outputs["base_food"], outputs["bldg_food"], supply_tag, outputs["total_food"],
+	]
+	var food_label := Label.new()
+	food_label.text = food_text
+	UITheme.style_label_body(food_label, FONT_BODY, UITheme.PARCHMENT_DIM)
+	parent.add_child(food_label)
+
+	# Production line
+	var net: int = outputs["net_prod"]
+	var prod_color: Color = UITheme.PARCHMENT_DIM
+	if net < 0:
+		prod_color = Color(0.9, 0.3, 0.3)  # red for deficit
+	var prod_text := "  Prod: %d base + %d bldg%s - %d upkeep = %d" % [
+		outputs["base_prod"], outputs["bldg_prod"], supply_tag,
+		outputs["upkeep"], net,
+	]
+	var prod_label := Label.new()
+	prod_label.text = prod_text
+	UITheme.style_label_body(prod_label, FONT_BODY, prod_color)
+	parent.add_child(prod_label)
+
+	# Deficit warning
+	if net < 0:
+		var warn := Label.new()
+		warn.text = "  ! Production deficit"
+		UITheme.style_label_body(warn, FONT_BODY, Color(0.9, 0.3, 0.3))
+		parent.add_child(warn)
+
+	# Military/stability/tech (only show if non-zero)
+	var extras: Array[String] = []
+	if outputs["bldg_mil"] > 0.0:
+		extras.append("Mil +%.0f" % outputs["total_mil"])
+	if outputs["bldg_stab"] > 0.0:
+		extras.append("Stab +%.0f" % outputs["total_stab"])
+	if outputs["bldg_def"] > 0.0:
+		extras.append("Def +%.0f%%" % (outputs["total_def"] * 100.0))
+	if outputs["bldg_tech"] > 0.0:
+		extras.append("Tech +%.1f" % outputs["total_tech"])
+	if not extras.is_empty():
+		var extra_label := Label.new()
+		extra_label.text = "  " + ", ".join(extras)
+		UITheme.style_label_body(extra_label, FONT_BODY, UITheme.PARCHMENT_DIM)
+		parent.add_child(extra_label)
+
+
+func _add_recommended_actions(
+	parent: VBoxContainer, town: TownData, region: RegionData, civ: CivilizationData
+) -> void:
+	var suggestions: Array[String] = []
+
+	var outputs := TownSimulation.compute_town_outputs(town, region)
+
+	if outputs["total_food"] < 3:
+		suggestions.append("Build Granary (+2 food)")
+	if civ.stability < 40.0:
+		suggestions.append("Build Monument (+3 stab)")
+	if civ.is_at_war():
+		suggestions.append("Build Barracks (+2 mil)")
+	if outputs["net_prod"] > 4 and suggestions.is_empty():
+		suggestions.append("Build Workshop (+3 prod)")
+
+	if suggestions.is_empty():
+		return
+
+	# Show max 3 suggestions
+	for j in range(mini(suggestions.size(), 3)):
+		var sug_label := Label.new()
+		sug_label.text = "  > %s" % suggestions[j]
+		UITheme.style_label_body(sug_label, FONT_BODY, UITheme.GOLD_DIM)
+		parent.add_child(sug_label)
+
+
+func _get_town_specialization(town: TownData) -> String:
+	var category_counts := {}
+	for entry in town.buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			var cat: String = Constants.BUILDING_RULES[btype]["category"]
+			category_counts[cat] = category_counts.get(cat, 0) + count
+	if category_counts.is_empty():
+		return ""
+	var best_cat := ""
+	var best_count := 0
+	for cat in category_counts:
+		if category_counts[cat] > best_count:
+			best_count = category_counts[cat]
+			best_cat = cat
+	return best_cat.capitalize()
+
+
+# ==================== TIER PROGRESS ====================
+
+func _update_tier_progress(region: RegionData) -> void:
+	for child in tier_progress_container.get_children():
+		child.queue_free()
+
+	if region.owner_id != GameState.player_civ_id:
+		return
+	var player_civ := GameState.get_player_civ()
+	if not player_civ:
+		return
+
+	if region.development_tier >= 5:
+		var max_label := Label.new()
+		max_label.text = "Maximum tier reached"
+		UITheme.style_label_body(max_label, FONT_BODY, UITheme.COLOR_FOOD)
+		tier_progress_container.add_child(max_label)
+		return
+
+	var next_tier: int = region.development_tier + 1
+	if next_tier >= Constants.DEV_TIER_GATES.size():
+		return
+	var gate: Array = Constants.DEV_TIER_GATES[next_tier]
+
+	var pop_density := _calc_pop_density(region)
+
+	# gate = [min_infra, min_pop_density, min_stability, min_governance, min_era]
+	var reqs: Array[Dictionary] = [
+		{"name": "Infra", "need": gate[0], "have": region.infrastructure_level, "met": region.infrastructure_level >= gate[0]},
+		{"name": "Density", "need": gate[1], "have": pop_density, "met": pop_density >= gate[1], "fmt": "%.2f"},
+		{"name": "Stability", "need": gate[2], "have": player_civ.stability, "met": player_civ.stability >= gate[2], "fmt": "%.0f"},
+		{"name": "Governance", "need": gate[3], "have": player_civ.governance_tier, "met": player_civ.governance_tier >= gate[3]},
+		{"name": "Era", "need": gate[4], "have": player_civ.current_era, "met": player_civ.current_era >= gate[4]},
+	]
+
+	# Resource gates
+	if next_tier < Constants.DEV_TIER_RESOURCE_GATES.size():
+		var res_gate: Array = Constants.DEV_TIER_RESOURCE_GATES[next_tier]
+		for res_type in res_gate:
+			var has_it: bool = player_civ.resource_stockpiles.get(res_type, 0) > 0
+			reqs.append({
+				"name": ResourceProduction.get_resource_name(res_type),
+				"need": 1, "have": 1 if has_it else 0, "met": has_it,
+			})
+
+	var tier_name := DevelopmentTierSimulation.get_tier_name(next_tier)
+	var title := Label.new()
+	title.text = "%s" % tier_name
+	UITheme.style_label_body(title, FONT_BODY, UITheme.PARCHMENT)
+	tier_progress_container.add_child(title)
+
+	for req in reqs:
+		var color: Color
+		if req["met"]:
+			color = UITheme.COLOR_FOOD
+		else:
+			var need_f := float(req["need"])
+			var have_f := float(req["have"])
+			if need_f > 0 and have_f / need_f >= 0.80:
+				color = UITheme.GOLD
+			else:
+				color = UITheme.COLOR_MILITARY
+
+		var fmt: String = req.get("fmt", "%d")
+		var text: String
+		if req["met"]:
+			text = "  %s: OK" % req["name"]
+		else:
+			text = "  %s: need %s (have %s)" % [req["name"], fmt % req["need"], fmt % req["have"]]
+
+		var lbl := Label.new()
+		lbl.text = text
+		UITheme.style_label_body(lbl, FONT_BODY, color)
+		tier_progress_container.add_child(lbl)
+
+		# Add governance hint when unmet
+		if req["name"] == "Governance" and not req["met"]:
+			var needed_regions := _governance_region_hint(int(req["need"]))
+			if needed_regions > 0:
+				var hint := Label.new()
+				hint.text = "    (Need %d+ regions)" % needed_regions
+				UITheme.style_label_body(hint, FONT_BODY - 1, UITheme.PARCHMENT_DIM)
+				tier_progress_container.add_child(hint)
+
+
+func _governance_region_hint(needed_tier: int) -> int:
+	if needed_tier < GovernanceSimulation.TIER_DATA.size():
+		return GovernanceSimulation.TIER_DATA[needed_tier][0]
+	return 0
+
+
+static func _calc_pop_density(region: RegionData) -> float:
+	var capacity: int = Constants.TERRAIN_POP_CAPACITY.get(region.terrain_type, 5000)
+	var effective_cap := int(float(capacity) * region.size_factor)
+	if effective_cap <= 0:
+		return 0.0
+	return clampf(float(region.population) / float(effective_cap), 0.0, 1.0)

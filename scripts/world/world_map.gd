@@ -1,3 +1,4 @@
+class_name WorldMap
 extends Node2D
 
 ## Renders world map using Voronoi tessellation for irregular province shapes.
@@ -115,6 +116,7 @@ func _ready() -> void:
 	EventBus.turn_ended.connect(_on_turn_ended)
 	EventBus.region_owner_changed.connect(_on_owner_changed)
 	EventBus.overlay_changed.connect(_on_overlay_changed)
+	EventBus.visibility_updated.connect(_on_visibility_updated)
 	# Center camera on continent after map is built
 	call_deferred("_center_camera")
 
@@ -173,6 +175,14 @@ func _build_map() -> void:
 		visual.initialize(region_data, local_poly)
 		add_child(visual)
 		region_visuals[region_id] = visual
+
+	# Auto-compute adjacency from polygon geometry (replaces manual .tres data)
+	# MUST happen BEFORE visibility init or any simulation that uses adjacency
+	_compute_adjacency_from_polygons()
+
+	# Initialize fog of war: compute visibility from owned regions + neighbors
+	# MUST happen AFTER adjacency is computed and civs have starting regions
+	GameState.update_all_visibility()
 
 	# Build border lines on top of everything
 	border_container = Node2D.new()
@@ -308,8 +318,12 @@ func _build_all_borders() -> void:
 	for child in border_container.get_children():
 		child.queue_free()
 
-	# Province outlines (thin lines around every region)
+	# Province outlines (thin lines around every region -- skip HIDDEN)
 	for region_id in region_polygons:
+		var vis := GameState.get_player_visibility(region_id)
+		if vis == Enums.VisibilityState.HIDDEN:
+			continue
+
 		var poly: PackedVector2Array = region_polygons[region_id]
 		if poly.size() < 3:
 			continue
@@ -335,8 +349,18 @@ func _draw_civ_borders() -> void:
 		if not region:
 			continue
 
+		# Skip borders for HIDDEN regions
+		var vis_a := GameState.get_player_visibility(region_id)
+		if vis_a == Enums.VisibilityState.HIDDEN:
+			continue
+
 		for adj_id in region.adjacency_list:
 			if not region_polygons.has(adj_id):
+				continue
+
+			# Only draw civ borders when BOTH regions are EXPLORED or VISIBLE
+			var vis_b := GameState.get_player_visibility(adj_id)
+			if vis_b == Enums.VisibilityState.HIDDEN:
 				continue
 
 			var pair_key: int = mini(region_id, adj_id) * 10000 + maxi(region_id, adj_id)
@@ -417,9 +441,16 @@ func _on_region_deselected() -> void:
 
 
 func _on_turn_ended(_year: int) -> void:
+	# Visual refresh is handled by _on_visibility_updated (emitted before turn_ended)
+	# Only rebuild borders here for ownership changes during the turn
+	pass
+
+
+func _on_visibility_updated() -> void:
+	## Refresh all region visuals and borders when fog of war changes.
 	for visual in region_visuals.values():
 		visual.update_appearance()
-	_refresh_civ_borders()
+	_build_all_borders()
 
 
 func _on_owner_changed(_region_id: int, _old: int, _new: int) -> void:
@@ -537,6 +568,46 @@ func _center_camera() -> void:
 	if camera and camera.has_method("center_on_map"):
 		var bounds := get_map_bounds()
 		camera.center_on_map(bounds)
+
+
+func _compute_adjacency_from_polygons() -> void:
+	## Auto-compute region adjacency from shared Voronoi polygon edges.
+	## Two regions are adjacent if their polygons share 2+ vertices within EPSILON.
+	## This replaces the manually curated adjacency_list data in .tres files.
+	var region_ids: Array = region_polygons.keys()
+
+	# Clear all existing adjacency data
+	for id in region_ids:
+		var region := GameState.get_region(id)
+		if region:
+			region.adjacency_list.clear()
+
+	# Check each unique pair once (i < j avoids duplicates)
+	for i in region_ids.size():
+		for j in range(i + 1, region_ids.size()):
+			var id_a: int = region_ids[i]
+			var id_b: int = region_ids[j]
+			if _polygons_share_edge(region_polygons[id_a], region_polygons[id_b]):
+				var ra := GameState.get_region(id_a)
+				var rb := GameState.get_region(id_b)
+				if ra and rb:
+					ra.adjacency_list.append(id_b)
+					rb.adjacency_list.append(id_a)
+
+
+static func _polygons_share_edge(
+	poly_a: PackedVector2Array, poly_b: PackedVector2Array
+) -> bool:
+	## Returns true if two polygons share an edge (2+ vertices within EPSILON).
+	const EPSILON_SQ := 4.0  # 2.0 pixels squared (avoids sqrt)
+	var shared_count := 0
+	for va in poly_a:
+		for vb in poly_b:
+			if va.distance_squared_to(vb) < EPSILON_SQ:
+				shared_count += 1
+				if shared_count >= 2:
+					return true
+	return false
 
 
 func get_map_bounds() -> Rect2:

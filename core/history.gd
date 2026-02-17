@@ -37,6 +37,10 @@ const TYPE_SEVERITY: Dictionary = {
 	"shortage": SEVERITY_MINOR,
 	"deposit_depleted": SEVERITY_MINOR,
 	"maintenance_failure": SEVERITY_MINOR,
+	"town_founded": SEVERITY_MINOR,
+	"building_constructed": SEVERITY_MINOR,
+	"alliance_broken": SEVERITY_NOTABLE,
+	"workforce_changed": SEVERITY_MINOR,
 }
 
 
@@ -85,12 +89,11 @@ static func get_events_by_civ(civ_id: int) -> Array[Dictionary]:
 static func get_stability_trend(civ_id: int, last_n: int = 20) -> Array[Dictionary]:
 	## Returns the last N stability snapshots for a civ.
 	var snapshots: Array = stability_history.get(civ_id, [])
-	if snapshots.size() <= last_n:
-		var result: Array[Dictionary] = []
-		result.assign(snapshots)
-		return result
 	var result: Array[Dictionary] = []
-	result.assign(snapshots.slice(snapshots.size() - last_n))
+	if snapshots.size() <= last_n:
+		result.assign(snapshots)
+	else:
+		result.assign(snapshots.slice(snapshots.size() - last_n))
 	return result
 
 

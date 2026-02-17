@@ -107,4 +107,11 @@ enum BuildingType {
 	WORKSHOP,
 	LIBRARY,
 	MONUMENT,
+	TOWN_HALL,
+}
+
+enum VisibilityState {
+	HIDDEN,     # Unknown territory - dark fog
+	EXPLORED,   # Previously visible - terrain known, stale data
+	VISIBLE,    # Currently adjacent to owned territory - full detail
 }

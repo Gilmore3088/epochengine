@@ -74,6 +74,13 @@ func _rebuild() -> void:
 	_add_sep()
 	_build_insights(civ, regions, econ, admin_cap)
 
+	# Hidden metrics + tech proximity (player civ only)
+	if civ.id == GameState.player_civ_id:
+		_add_sep()
+		_build_tech_proximity(civ)
+		_add_sep()
+		_build_discoveries(civ)
+
 	var has_diplo: bool = (
 		not civ.war_targets.is_empty()
 		or not civ.alliance_partners.is_empty()
@@ -246,6 +253,56 @@ func _build_header(civ: CivilizationData, regions: Array[RegionData]) -> void:
 	info_lbl.text = "%s  |  %s  |  %d regions" % [tier_name, era_names[era_idx], regions.size()]
 	UITheme.style_label_body(info_lbl, 14, UITheme.PARCHMENT)
 	header.add_child(info_lbl)
+
+	# Strategy selectors (player civ only)
+	if civ.id == GameState.player_civ_id:
+		var strat_row := HBoxContainer.new()
+		strat_row.add_theme_constant_override("separation", 12)
+		header.add_child(strat_row)
+
+		# Research focus selector
+		var focus_box := VBoxContainer.new()
+		focus_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		strat_row.add_child(focus_box)
+		var focus_hdr := Label.new()
+		focus_hdr.text = "Research Focus"
+		UITheme.style_label_body(focus_hdr, 11, UITheme.PARCHMENT_DIM)
+		focus_box.add_child(focus_hdr)
+		var focus_opt := OptionButton.new()
+		focus_opt.focus_mode = Control.FOCUS_NONE
+		for fid in Constants.RESEARCH_FOCUS_NAMES:
+			focus_opt.add_item(Constants.RESEARCH_FOCUS_NAMES[fid], fid)
+		focus_opt.selected = civ.research_focus
+		if civ.research_focus_cooldown > 0:
+			focus_opt.disabled = true
+			focus_hdr.text = "Research Focus (%dyr)" % civ.research_focus_cooldown
+		focus_opt.item_selected.connect(func(idx: int) -> void:
+			PlayerActions.queue_action({"type": "set_research_focus", "focus": idx})
+		)
+		UITheme.style_button(focus_opt)
+		focus_box.add_child(focus_opt)
+
+		# Spending priority selector
+		var spend_box := VBoxContainer.new()
+		spend_box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		strat_row.add_child(spend_box)
+		var spend_hdr := Label.new()
+		spend_hdr.text = "Spending Priority"
+		UITheme.style_label_body(spend_hdr, 11, UITheme.PARCHMENT_DIM)
+		spend_box.add_child(spend_hdr)
+		var spend_opt := OptionButton.new()
+		spend_opt.focus_mode = Control.FOCUS_NONE
+		for pid in Constants.SPENDING_PRIORITY_NAMES:
+			spend_opt.add_item(Constants.SPENDING_PRIORITY_NAMES[pid], pid)
+		spend_opt.selected = civ.spending_priority
+		if civ.spending_priority_cooldown > 0:
+			spend_opt.disabled = true
+			spend_hdr.text = "Spending Priority (%dyr)" % civ.spending_priority_cooldown
+		spend_opt.item_selected.connect(func(idx: int) -> void:
+			PlayerActions.queue_action({"type": "set_spending_priority", "priority": idx})
+		)
+		UITheme.style_button(spend_opt)
+		spend_box.add_child(spend_opt)
 
 
 func _build_stat_cards(civ: CivilizationData, econ: Dictionary) -> void:
@@ -476,6 +533,135 @@ func _build_insights(
 	else:
 		for o in opps:
 			_add_insight_line(opp_col, o, Color(0.50, 0.78, 0.45))
+
+
+func _build_tech_proximity(civ: CivilizationData) -> void:
+	var lbl := Label.new()
+	lbl.text = "Research Progress"
+	UITheme.style_label_header(lbl, 16)
+	_content.add_child(lbl)
+
+	# Hidden metrics display
+	var metrics_row := HBoxContainer.new()
+	metrics_row.add_theme_constant_override("separation", 4)
+	_content.add_child(metrics_row)
+
+	var proximity := TechEmergence.get_next_tech_proximity(civ)
+	var metric_data := [
+		{"name": "Kn", "value": civ.knowledge},
+		{"name": "En", "value": civ.energy},
+		{"name": "So", "value": civ.social_coordination},
+		{"name": "Ec", "value": civ.economic_surplus},
+		{"name": "Mi", "value": civ.military_pressure},
+	]
+	var metric_keys := ["Knowledge", "Energy", "Social", "Economic", "Military"]
+
+	for i in range(metric_data.size()):
+		var md: Dictionary = metric_data[i]
+		var color := _metric_color(md["value"], metric_keys[i], proximity)
+		_add_card(metrics_row, md["name"], "%.0f" % md["value"], color)
+
+	# "Discovery brewing" label
+	var any_brewing := false
+	for entry in proximity:
+		if entry["all_met"]:
+			any_brewing = true
+			break
+
+	if any_brewing:
+		var brew_lbl := Label.new()
+		brew_lbl.text = "A discovery is possible..."
+		UITheme.style_label_body(brew_lbl, 13, Color(0.45, 0.78, 0.42))
+		_content.add_child(brew_lbl)
+
+	# Show closest undiscovered techs (top 3, without revealing names — show gap count)
+	var shown := 0
+	var hint_box := VBoxContainer.new()
+	hint_box.add_theme_constant_override("separation", 2)
+	_content.add_child(hint_box)
+	for entry in proximity:
+		if shown >= 3:
+			break
+		var gaps: Array = entry["gaps"]
+		if entry["all_met"]:
+			_add_insight_line(hint_box, "??? — Thresholds met, awaiting emergence", Color(0.45, 0.78, 0.42))
+		elif gaps.size() <= 2:
+			var gap_parts: Array[String] = []
+			for g in gaps:
+				gap_parts.append("%s: %.0f/%.0f" % [g["metric"], g["current"], g["needed"]])
+			_add_insight_line(hint_box, "??? — Need: %s" % ", ".join(gap_parts), Color(0.82, 0.72, 0.28))
+		else:
+			continue
+		shown += 1
+
+	# Golden age proximity
+	if not civ.is_in_golden_age() and civ.golden_age_cooldown <= 0:
+		if civ.stability >= 60.0:
+			var ga_lbl := Label.new()
+			ga_lbl.text = "Golden Age: Stability %.0f / %.0f" % [
+				civ.stability, Constants.GOLDEN_AGE_STABILITY_THRESHOLD]
+			var ga_color: Color
+			if civ.stability >= Constants.GOLDEN_AGE_STABILITY_THRESHOLD:
+				ga_color = Color(0.45, 0.78, 0.42)
+			else:
+				ga_color = Color(0.82, 0.72, 0.28)
+			UITheme.style_label_body(ga_lbl, 13, ga_color)
+			_content.add_child(ga_lbl)
+	elif civ.is_in_golden_age():
+		var ga_lbl := Label.new()
+		ga_lbl.text = "Golden Age: %d years remaining" % civ.golden_age_years_remaining
+		UITheme.style_label_body(ga_lbl, 13, Color(0.90, 0.80, 0.20))
+		_content.add_child(ga_lbl)
+
+
+func _build_discoveries(civ: CivilizationData) -> void:
+	var hdr := Label.new()
+	hdr.text = "Discoveries"
+	UITheme.style_label_header(hdr, 16)
+	_content.add_child(hdr)
+
+	var count_lbl := Label.new()
+	count_lbl.text = "%d / %d discovered" % [civ.technologies.size(), TechEmergence.TECH_TABLE.size()]
+	UITheme.style_label_body(count_lbl, 12, UITheme.PARCHMENT_DIM)
+	_content.add_child(count_lbl)
+
+	var grid := VBoxContainer.new()
+	grid.add_theme_constant_override("separation", 2)
+	_content.add_child(grid)
+
+	for tech in TechEmergence.TECH_TABLE:
+		var tech_name: String = tech["name"]
+		var discovered := civ.technologies.has(tech_name)
+		var lbl := Label.new()
+		if discovered:
+			lbl.text = "  %s" % tech_name
+			UITheme.style_label_body(lbl, 12, Color(0.6, 0.85, 0.5))
+		else:
+			lbl.text = "  ???"
+			UITheme.style_label_body(lbl, 12, Color(0.4, 0.38, 0.35))
+		grid.add_child(lbl)
+
+
+func _metric_color(value: float, metric_key: String, proximity: Array[Dictionary]) -> Color:
+	# Green if meets any undiscovered tech threshold, yellow if within 15, gray otherwise
+	for entry in proximity:
+		if entry["all_met"]:
+			continue
+		for g in entry["gaps"]:
+			if g["metric"] == metric_key:
+				if value >= g["needed"]:
+					return Color(0.45, 0.78, 0.42)  # green — met
+				elif g["needed"] - value <= 15.0:
+					return Color(0.82, 0.72, 0.28)  # gold — close
+	# Check if this metric is met for all undiscovered techs that need it
+	var any_need := false
+	for entry in proximity:
+		for g in entry["gaps"]:
+			if g["metric"] == metric_key:
+				any_need = true
+	if not any_need and not proximity.is_empty():
+		return Color(0.45, 0.78, 0.42)  # green — all thresholds met for this metric
+	return UITheme.PARCHMENT_DIM  # gray — far
 
 
 func _build_diplomacy(civ: CivilizationData) -> void:

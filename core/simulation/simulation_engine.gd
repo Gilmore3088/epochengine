@@ -23,10 +23,12 @@ static func process_year() -> Dictionary:
 		"golden_age_starts": [],
 		"golden_age_ends": [],
 		"tech_emergences": [],
+		"era_changes": [],
 		"governance_changes": [],
 		"development_tier_changes": [],
 		"resource_events": [],
 		"town_events": [],
+		"victory_events": [],
 	}
 
 	# Accumulator for resource stability penalties (applied in stability step)
@@ -85,6 +87,9 @@ static func process_year() -> Dictionary:
 
 	# Step 9: Tech Emergence
 	_step_tech_emergence(events)
+
+	# Step 9.5: Victory/Defeat Check
+	_step_victory_check(events)
 
 	# Step 10: Metrics logging (if enabled)
 	_MetricsLogger.log_year()
@@ -330,7 +335,16 @@ static func _step_tech_emergence(events: Dictionary) -> void:
 			})
 
 		# Update era based on current tech count
+		var old_era := civ.current_era
 		civ.current_era = TechEmergence.compute_era(civ.technologies.size())
+		if civ.current_era != old_era:
+			events["era_changes"].append({
+				"civ_id": civ.id,
+				"civ_name": civ.civ_name,
+				"old_era": old_era,
+				"new_era": civ.current_era,
+				"era_name": Enums.Epoch.keys()[civ.current_era],
+			})
 
 
 # --- Step 3.6: Supply Route Calculation ---
@@ -467,3 +481,19 @@ static func _try_spawn_hero(civ: CivilizationData, events: Dictionary) -> void:
 		"civ_id": civ.id,
 		"civ_name": civ.civ_name,
 	})
+
+
+# --- Step 9.5: Victory/Defeat Check ---
+
+static func _step_victory_check(events: Dictionary) -> void:
+	for civ in GameState.get_alive_civilizations():
+		var victory := VictoryChecker.check_victory(civ)
+		if not victory.is_empty():
+			events["victory_events"].append(victory)
+
+	# Check defeat for player civ
+	var player_civ := GameState.get_civilization(GameState.player_civ_id)
+	if player_civ:
+		var defeat := VictoryChecker.check_defeat(player_civ)
+		if not defeat.is_empty():
+			events["victory_events"].append(defeat)

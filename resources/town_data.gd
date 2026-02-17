@@ -11,6 +11,7 @@ extends Resource
 @export var buildings: Array[Dictionary] = []  # [{type: BuildingType, count: int}]
 @export var infrastructure_level: int = 0
 @export var founded_year: int = 0
+@export var workforce_preset: int = 0  # index into Constants.WORKFORCE_PRESETS
 
 
 func _init(
@@ -46,42 +47,71 @@ func add_building(building_type: int) -> void:
 
 
 func get_food_bonus() -> int:
-	## Food bonus from buildings (GRANARY = +2 each).
-	return get_building_count(Enums.BuildingType.GRANARY) * Constants.BUILDING_GRANARY_FOOD
+	## Food bonus from all buildings via BUILDING_RULES.
+	var bonus := 0
+	for entry in buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			bonus += count * int(Constants.BUILDING_RULES[btype]["outputs"]["food"])
+	return bonus
 
 
 func get_production_bonus() -> int:
-	## Production bonus from buildings (MARKET = +2, WORKSHOP = +3).
+	## Production bonus from all buildings via BUILDING_RULES.
 	var bonus := 0
-	bonus += get_building_count(Enums.BuildingType.MARKET) * Constants.BUILDING_MARKET_PRODUCTION
-	bonus += get_building_count(Enums.BuildingType.WORKSHOP) * Constants.BUILDING_WORKSHOP_PRODUCTION
+	for entry in buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			bonus += count * int(Constants.BUILDING_RULES[btype]["outputs"]["production"])
 	return bonus
 
 
 func get_defense_bonus() -> float:
-	## Defense bonus from buildings (BARRACKS = +0.05, WALLS = +0.10).
+	## Defense bonus from all buildings via BUILDING_RULES.
 	var bonus := 0.0
-	bonus += float(get_building_count(Enums.BuildingType.BARRACKS)) * Constants.BUILDING_BARRACKS_DEFENSE
-	bonus += float(get_building_count(Enums.BuildingType.WALLS)) * Constants.BUILDING_WALLS_DEFENSE
+	for entry in buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			bonus += float(count) * float(Constants.BUILDING_RULES[btype]["outputs"]["defense"])
 	return bonus
 
 
 func get_stability_bonus() -> float:
-	## Stability bonus from buildings (MARKET = +1, MONUMENT = +3).
+	## Stability bonus from all buildings via BUILDING_RULES.
 	var bonus := 0.0
-	bonus += float(get_building_count(Enums.BuildingType.MARKET)) * Constants.BUILDING_MARKET_STABILITY
-	bonus += float(get_building_count(Enums.BuildingType.MONUMENT)) * Constants.BUILDING_MONUMENT_STABILITY
+	for entry in buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			bonus += float(count) * float(Constants.BUILDING_RULES[btype]["outputs"]["stability"])
 	return bonus
 
 
 func get_military_bonus() -> float:
-	## Military bonus from BARRACKS buildings.
-	return float(get_building_count(Enums.BuildingType.BARRACKS)) * Constants.BUILDING_BARRACKS_MILITARY
+	## Military bonus from all buildings via BUILDING_RULES.
+	var bonus := 0.0
+	for entry in buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			bonus += float(count) * float(Constants.BUILDING_RULES[btype]["outputs"]["military"])
+	return bonus
 
 
 func get_maintenance_cost() -> int:
-	## Total production maintenance for all buildings.
-	return get_total_building_count() * Constants.BUILDING_MAINTENANCE_PER
+	## Total production maintenance via BUILDING_RULES upkeep_cost.
+	var total := 0
+	for entry in buildings:
+		var btype: int = entry.get("type", -1)
+		var count: int = entry.get("count", 0)
+		if Constants.BUILDING_RULES.has(btype):
+			total += count * int(Constants.BUILDING_RULES[btype]["upkeep_cost"])
+		else:
+			total += count * Constants.BUILDING_MAINTENANCE_PER
+	return total
 
 
 func to_dict() -> Dictionary:
@@ -93,6 +123,7 @@ func to_dict() -> Dictionary:
 		"buildings": buildings.duplicate(true),
 		"infrastructure_level": infrastructure_level,
 		"founded_year": founded_year,
+		"workforce_preset": workforce_preset,
 	}
 
 
@@ -107,4 +138,5 @@ static func from_dict(data: Dictionary) -> Resource:
 	town.buildings = data.get("buildings", [])
 	town.infrastructure_level = data.get("infrastructure_level", 0)
 	town.founded_year = data.get("founded_year", 0)
+	town.workforce_preset = data.get("workforce_preset", 0)
 	return town

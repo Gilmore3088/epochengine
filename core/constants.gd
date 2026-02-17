@@ -382,16 +382,18 @@ const BUILDING_BASE_COST := 10             # base production to construct a buil
 const BUILDING_COST_ESCALATION := 1.3      # cost = base * escalation^count_of_same_type
 const BUILDING_MAINTENANCE_PER := 1        # production/yr maintenance per building
 
-# Building effects
-const BUILDING_GRANARY_FOOD := 2           # +food per granary
-const BUILDING_BARRACKS_DEFENSE := 0.05    # +defense per barracks
-const BUILDING_BARRACKS_MILITARY := 2.0    # +military strength per barracks
-const BUILDING_MARKET_PRODUCTION := 2      # +production per market
-const BUILDING_MARKET_STABILITY := 1.0     # +stability per market
-const BUILDING_WALLS_DEFENSE := 0.10       # +defense per walls
-const BUILDING_WORKSHOP_PRODUCTION := 3    # +production per workshop
-const BUILDING_LIBRARY_TECH := 1.0         # +tech pressure per library
-const BUILDING_MONUMENT_STABILITY := 3.0   # +stability per monument
+
+# Structured building metadata table (keyed by BuildingType int)
+const BUILDING_RULES := {
+	0: {"category": "food", "build_cost": 8, "upkeep_cost": 1, "outputs": {"food": 2, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Stores grain, boosting food output."},
+	1: {"category": "military", "build_cost": 12, "upkeep_cost": 2, "outputs": {"food": 0, "production": 0, "military": 2.0, "stability": 0.0, "defense": 0.05, "tech": 0.0, "trade": 0}, "description": "Trains soldiers and fortifies garrison."},
+	2: {"category": "trade", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 2, "military": 0.0, "stability": 1.0, "defense": 0.0, "tech": 0.0, "trade": 1}, "description": "Commerce hub boosting production and stability."},
+	3: {"category": "military", "build_cost": 14, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.10, "tech": 0.0, "trade": 0}, "description": "Stone fortifications improving defense."},
+	4: {"category": "production", "build_cost": 12, "upkeep_cost": 2, "outputs": {"food": 0, "production": 3, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Artisan workshops for manufacturing."},
+	5: {"category": "knowledge", "build_cost": 15, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 1.0, "trade": 0}, "description": "Repository advancing hidden tech metrics."},
+	6: {"category": "administration", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 3.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Grand monument inspiring civic unity."},
+	7: {"category": "administration", "build_cost": 15, "upkeep_cost": 2, "outputs": {"food": 0, "production": 1, "military": 0.0, "stability": 2.0, "defense": 0.0, "tech": 0.5, "trade": 1}, "description": "Civic center enabling workforce management."},
+}
 
 # Building names for display
 const BUILDING_NAMES := {
@@ -402,4 +404,41 @@ const BUILDING_NAMES := {
 	4: "Workshop",
 	5: "Library",
 	6: "Monument",
+	7: "Town Hall",
 }
+
+# Workforce presets (index -> multiplier dict)
+const WORKFORCE_PRESETS := {
+	0: {"name": "Balanced",  "food": 1.0, "production": 1.0, "military": 1.0, "stability": 1.0, "tech": 1.0},
+	1: {"name": "Growth",    "food": 1.4, "production": 0.7, "military": 0.6, "stability": 1.0, "tech": 0.8},
+	2: {"name": "Military",  "food": 0.8, "production": 0.8, "military": 1.6, "stability": 0.8, "tech": 0.6},
+	3: {"name": "Trade",     "food": 0.8, "production": 1.3, "military": 0.5, "stability": 1.2, "tech": 1.0},
+	4: {"name": "Knowledge", "food": 0.7, "production": 0.8, "military": 0.5, "stability": 1.0, "tech": 1.6},
+}
+
+# Urban gravity formula factors
+const URBAN_GRAVITY_INFRA_FACTOR := 0.2
+const URBAN_GRAVITY_TRADE_FACTOR := 0.1
+const URBAN_GRAVITY_DEFAULT_TRADE_FLUX := 0.3
+
+const DEFICIT_STABILITY_PENALTY_PER_TOWN := 2.0  # stability penalty per town in production deficit
+
+# --- Research Focus ---
+const RESEARCH_FOCUS_NAMES := {
+	0: "Balanced", 1: "Knowledge", 2: "Energy",
+	3: "Social", 4: "Economic", 5: "Military",
+}
+const RESEARCH_FOCUS_BOOST := 1.0  # +100% = 2x multiplier on focused metric growth
+const RESEARCH_FOCUS_COOLDOWN_YEARS := 3
+
+# --- Spending Priorities ---
+const SPENDING_PRIORITY_NAMES := {
+	0: "Balanced", 1: "Growth", 2: "Production", 3: "Military",
+}
+const SPENDING_PRIORITIES := {
+	0: {"food": 1.0, "production": 1.0, "military": 1.0},
+	1: {"food": 1.5, "production": 0.75, "military": 0.80},
+	2: {"food": 0.85, "production": 1.5, "military": 0.80},
+	3: {"food": 0.75, "production": 0.75, "military": 1.6},
+}
+const SPENDING_PRIORITY_COOLDOWN_YEARS := 5

@@ -19,9 +19,11 @@ var governance_label: Label
 var regions_label: Label
 var zoom_in_btn: Button
 var zoom_out_btn: Button
+var golden_age_hint: Label
 
 # --- Resource bar elements ---
 var resource_bar_bg: Panel
+var resource_bar: HBoxContainer
 var resource_labels: Dictionary = {}  # {resource_type_int: Label}
 
 # --- Overlay buttons ---
@@ -37,6 +39,9 @@ var summary_year_label: Label
 var summary_content: RichTextLabel
 var summary_continue_btn: Button
 
+# --- Region panel ---
+var region_panel: PanelContainer
+
 # --- State ---
 var player_civ_id: int:
 	get: return GameState.player_civ_id
@@ -46,6 +51,7 @@ var is_fast_forwarding: bool = false
 var ff_should_pause: bool = false
 
 # Auto-play state
+var game_ended: bool = false
 var is_auto_playing: bool = false
 var auto_play_interval: float = 0.8
 var play_btn: Button
@@ -53,6 +59,10 @@ var playing_label: Label
 
 # Toast notification elements
 var toast_container: VBoxContainer
+
+# Autosave: 3 rotating slots, every 25 years
+var _autosave_slot: int = 0
+const AUTOSAVE_INTERVAL := 25
 
 # Pre-fast-forward state snapshot
 var ff_pre_state: Dictionary = {}
@@ -115,6 +125,7 @@ func _build_top_bar() -> void:
 	year_label = Label.new()
 	year_label.text = "Year 0"
 	UITheme.style_label_header(year_label, 28)
+	year_label.tooltip_text = "Current simulation year"
 	state_group.add_child(year_label)
 
 	var stability_box := VBoxContainer.new()
@@ -124,6 +135,7 @@ func _build_top_bar() -> void:
 	stability_label = Label.new()
 	stability_label.text = "Stability: 50"
 	UITheme.style_label_body(stability_label, 13, UITheme.PARCHMENT_DIM)
+	stability_label.tooltip_text = "Stability: How content your people are.\nBelow 30 risks collapse.\nAbove 80 can trigger a Golden Age."
 	stability_box.add_child(stability_label)
 
 	stability_bar = ProgressBar.new()
@@ -132,11 +144,17 @@ func _build_top_bar() -> void:
 	stability_bar.value = 50
 	stability_bar.custom_minimum_size = Vector2(160, 12)
 	stability_bar.show_percentage = false
+	stability_bar.tooltip_text = "Stability: How content your people are.\nBelow 30 risks collapse.\nAbove 80 can trigger a Golden Age."
 	var bar_bg := StyleBoxFlat.new()
 	bar_bg.bg_color = Color(0.12, 0.10, 0.08, 0.6)
 	bar_bg.set_corner_radius_all(2)
 	stability_bar.add_theme_stylebox_override("background", bar_bg)
 	stability_box.add_child(stability_bar)
+
+	golden_age_hint = Label.new()
+	golden_age_hint.visible = false
+	UITheme.style_label_body(golden_age_hint, 11, Color(1.0, 0.85, 0.3))
+	stability_box.add_child(golden_age_hint)
 
 	_add_separator(top_bar)
 
@@ -148,11 +166,13 @@ func _build_top_bar() -> void:
 	food_label = Label.new()
 	food_label.text = "Food: 0"
 	UITheme.style_label_stat(food_label, 15, UITheme.COLOR_FOOD)
+	food_label.tooltip_text = "Food stockpile.\nProduced by terrain and towns.\nConsumed by population."
 	econ_group.add_child(food_label)
 
 	production_label = Label.new()
 	production_label.text = "Production: 0"
 	UITheme.style_label_stat(production_label, 15, UITheme.COLOR_PRODUCTION)
+	production_label.tooltip_text = "Production stockpile.\nUsed for infrastructure, buildings,\nexpansion, and military upkeep."
 	econ_group.add_child(production_label)
 
 	_add_separator(top_bar)
@@ -161,6 +181,7 @@ func _build_top_bar() -> void:
 	military_label = Label.new()
 	military_label.text = "Military: 0"
 	UITheme.style_label_stat(military_label, 15, UITheme.COLOR_MILITARY)
+	military_label.tooltip_text = "Military strength.\nReplenished by production surplus.\nUsed in war auto-resolve."
 	top_bar.add_child(military_label)
 
 	_add_separator(top_bar)
@@ -173,16 +194,19 @@ func _build_top_bar() -> void:
 	era_label = Label.new()
 	era_label.text = "Prehistoric"
 	UITheme.style_label_stat(era_label, 14, Color(0.65, 0.55, 0.85))
+	era_label.tooltip_text = "Era: Determined by tech count.\nPrehistoric (0-2), Classical (3-5),\nIndustrial (6-8), Future (9+)."
 	empire_group.add_child(era_label)
 
 	governance_label = Label.new()
 	governance_label.text = "Tribal"
 	UITheme.style_label_stat(governance_label, 14, Color(0.55, 0.75, 0.65))
+	governance_label.tooltip_text = "Governance tier.\nHigher tiers grant admin capacity\nand reduce expansion friction."
 	empire_group.add_child(governance_label)
 
 	regions_label = Label.new()
 	regions_label.text = "0 regions"
 	UITheme.style_label_stat(regions_label, 14, UITheme.PARCHMENT_DIM)
+	regions_label.tooltip_text = "Total owned regions.\nExceeding admin capacity causes\noverextension penalties."
 	empire_group.add_child(regions_label)
 
 	_add_separator(top_bar)
@@ -196,24 +220,28 @@ func _build_top_bar() -> void:
 	advance_button.text = "Next Year"
 	advance_button.pressed.connect(_on_advance_pressed)
 	UITheme.style_button(advance_button)
+	advance_button.tooltip_text = "Advance one year (Space)"
 	time_group.add_child(advance_button)
 
 	play_btn = Button.new()
 	play_btn.text = "Play"
 	play_btn.pressed.connect(_toggle_auto_play)
 	UITheme.style_button(play_btn)
+	play_btn.tooltip_text = "Auto-advance turns (P)"
 	time_group.add_child(play_btn)
 
 	speed_5x_button = Button.new()
 	speed_5x_button.text = "+5"
 	speed_5x_button.pressed.connect(func() -> void: _start_fast_forward(5))
 	UITheme.style_button(speed_5x_button)
+	speed_5x_button.tooltip_text = "Fast-forward 5 years"
 	time_group.add_child(speed_5x_button)
 
 	speed_10x_button = Button.new()
 	speed_10x_button.text = "+10"
 	speed_10x_button.pressed.connect(func() -> void: _start_fast_forward(10))
 	UITheme.style_button(speed_10x_button)
+	speed_10x_button.tooltip_text = "Fast-forward 10 years"
 	time_group.add_child(speed_10x_button)
 
 	speed_label = Label.new()
@@ -300,17 +328,18 @@ func _build_resource_bar() -> void:
 	resource_bar_bg.visible = false
 	add_child(resource_bar_bg)
 
-	var bar := HBoxContainer.new()
-	bar.offset_left = 16
-	bar.offset_top = 55
-	bar.offset_right = -16
-	bar.add_theme_constant_override("separation", 14)
-	add_child(bar)
+	resource_bar = HBoxContainer.new()
+	resource_bar.offset_left = 16
+	resource_bar.offset_top = 55
+	resource_bar.offset_right = -16
+	resource_bar.add_theme_constant_override("separation", 14)
+	resource_bar.visible = false
+	add_child(resource_bar)
 
 	var title := Label.new()
 	title.text = "Resources:"
 	UITheme.style_label_body(title, 12, UITheme.GOLD_DIM)
-	bar.add_child(title)
+	resource_bar.add_child(title)
 
 	# Create a label for each resource type (hidden until unlocked)
 	for res_type in range(9):
@@ -318,7 +347,7 @@ func _build_resource_bar() -> void:
 		lbl.text = ""
 		lbl.visible = false
 		UITheme.style_label_stat(lbl, 12, UITheme.PARCHMENT_DIM)
-		bar.add_child(lbl)
+		resource_bar.add_child(lbl)
 		resource_labels[res_type] = lbl
 
 
@@ -326,6 +355,7 @@ func _update_resource_bar() -> void:
 	var civ := GameState.get_civilization(player_civ_id)
 	if not civ:
 		resource_bar_bg.visible = false
+		resource_bar.visible = false
 		return
 
 	var has_any := false
@@ -354,6 +384,7 @@ func _update_resource_bar() -> void:
 		has_any = true
 
 	resource_bar_bg.visible = has_any
+	resource_bar.visible = has_any
 
 
 # ==================== OVERLAY STRIP ====================
@@ -686,6 +717,7 @@ func _connect_signals() -> void:
 	EventBus.golden_age_started.connect(_on_golden_age_started)
 	EventBus.golden_age_ended.connect(_on_golden_age_ended)
 	EventBus.technology_emerged.connect(_on_tech_emerged)
+	EventBus.era_changed.connect(_on_era_changed)
 	EventBus.civilization_collapsed.connect(_on_civ_collapsed)
 	EventBus.battle_resolved.connect(_on_battle_resolved)
 	EventBus.food_shortage.connect(_on_food_shortage)
@@ -696,6 +728,10 @@ func _connect_signals() -> void:
 	EventBus.development_tier_changed.connect(_on_dev_tier_changed)
 	EventBus.resource_deposit_depleted.connect(_on_deposit_depleted)
 	EventBus.resource_maintenance_failure.connect(_on_maintenance_failure)
+	EventBus.town_founded.connect(_on_town_founded)
+	EventBus.building_constructed.connect(_on_building_constructed)
+	EventBus.game_won.connect(_on_game_won)
+	EventBus.game_lost.connect(_on_game_lost)
 
 
 func _update_display() -> void:
@@ -709,6 +745,17 @@ func _update_display() -> void:
 	var bar_tween := create_tween()
 	bar_tween.tween_property(stability_bar, "value", civ.stability, 0.3)
 	_update_stability_color(civ.stability)
+
+	# Golden age proximity hint
+	if civ.is_in_golden_age():
+		golden_age_hint.text = "Golden Age!"
+		golden_age_hint.visible = true
+	elif civ.stability >= Constants.GOLDEN_AGE_STABILITY_THRESHOLD - 5.0:
+		golden_age_hint.text = "Golden Age near!"
+		golden_age_hint.visible = true
+	else:
+		golden_age_hint.visible = false
+
 	food_label.text = "Food: %d" % civ.food_stockpile
 	production_label.text = "Prod: %d" % civ.production_stockpile
 	military_label.text = "Army: %.0f" % civ.military_strength
@@ -776,8 +823,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		EventBus.open_civ_profile.emit(player_civ_id)
 	elif event.is_action_pressed("open_timeline"):
 		EventBus.open_timeline.emit()
-	if event is InputEventKey and event.pressed and summary_bg.visible:
-		if event.keycode == KEY_ESCAPE or event.keycode == KEY_ENTER:
+	if event is InputEventKey and event.pressed:
+		if event.keycode == KEY_V:
+			var tracker := get_node_or_null("VictoryTracker") as VictoryTracker
+			if tracker:
+				tracker.toggle()
+				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_ESCAPE:
+			if summary_bg.visible:
+				_dismiss_summary()
+				get_viewport().set_input_as_handled()
+			elif not game_ended:
+				var pmenu := get_node_or_null("PauseMenu") as PauseMenu
+				if pmenu and not pmenu.visible:
+					pmenu.open_menu()
+					get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_ENTER and summary_bg.visible:
 			_dismiss_summary()
 			get_viewport().set_input_as_handled()
 
@@ -791,7 +852,7 @@ func _zoom_camera(amount: float) -> void:
 
 
 func _on_advance_pressed() -> void:
-	if TurnManager.is_processing or summary_bg.visible:
+	if TurnManager.is_turn_processing or summary_bg.visible or game_ended:
 		return
 	TurnManager.advance_year()
 
@@ -806,7 +867,7 @@ func _toggle_auto_play() -> void:
 
 
 func _start_auto_play() -> void:
-	if summary_bg.visible or is_fast_forwarding:
+	if summary_bg.visible or is_fast_forwarding or game_ended:
 		return
 	is_auto_playing = true
 	play_btn.text = "Pause"
@@ -826,7 +887,7 @@ func _pause_auto_play() -> void:
 
 
 func _on_auto_play_timeout() -> void:
-	if TurnManager.is_processing or summary_bg.visible:
+	if TurnManager.is_turn_processing or summary_bg.visible or game_ended:
 		return
 	TurnManager.advance_year()
 
@@ -859,7 +920,7 @@ func _pulse_playing_label() -> void:
 # ==================== FAST FORWARD ====================
 
 func _start_fast_forward(years: int) -> void:
-	if TurnManager.is_processing or summary_bg.visible:
+	if TurnManager.is_turn_processing or summary_bg.visible:
 		return
 	_capture_pre_state()
 	is_fast_forwarding = true
@@ -899,6 +960,10 @@ func _end_fast_forward() -> void:
 
 func _on_turn_ended(_year: int) -> void:
 	_update_display()
+	# Autosave every 25 years, 3 rotating slots
+	if GameState.current_year > 0 and GameState.current_year % AUTOSAVE_INTERVAL == 0 and not game_ended:
+		_autosave_slot = (_autosave_slot % 3) + 1
+		SaveManager.save_game("autosave_%d" % _autosave_slot)
 
 
 func _on_stability_changed(civ_id: int, _old: float, _new: float) -> void:
@@ -980,6 +1045,19 @@ func _on_tech_emerged(civ_id: int, tech_name: String) -> void:
 		_log("[color=#5e5][TECH] %s discovers %s[/color]" % [civ.civ_name, tech_name])
 		if is_auto_playing:
 			_show_toast("%s discovers %s" % [civ.civ_name, tech_name], Color(0.37, 0.88, 0.37))
+
+
+func _on_era_changed(civ_id: int, era_name: String) -> void:
+	if is_fast_forwarding:
+		if civ_id == player_civ_id:
+			ff_should_pause = true
+	var civ := GameState.get_civilization(civ_id)
+	if civ:
+		_log("[color=#da5][ERA] %s enters the %s era[/color]" % [civ.civ_name, era_name])
+		if civ_id == player_civ_id:
+			_show_toast("A New Era: %s" % era_name, UITheme.GOLD)
+		elif is_auto_playing:
+			_show_toast("%s enters the %s era" % [civ.civ_name, era_name], Color(0.85, 0.65, 0.28))
 
 
 func _on_civ_collapsed(civ_id: int) -> void:
@@ -1071,6 +1149,39 @@ func _on_maintenance_failure(civ_id: int, resource_name: String, missing_inputs:
 		])
 
 
+func _on_town_founded(region_id: int, town_name: String) -> void:
+	var region := GameState.get_region(region_id)
+	var region_name: String = region.region_name if region else "Unknown"
+	_log("[color=#8c8][TOWN] %s founded in %s[/color]" % [town_name, region_name])
+
+
+func _on_building_constructed(region_id: int, town_name: String, building_name: String) -> void:
+	var region := GameState.get_region(region_id)
+	var region_name: String = region.region_name if region else "Unknown"
+	_log("[color=#9ab][BUILD] %s built in %s (%s)[/color]" % [building_name, town_name, region_name])
+
+
+# ==================== VICTORY / DEFEAT ====================
+
+func _on_game_won(victory_type: String, details: Dictionary) -> void:
+	_pause_auto_play()
+	game_ended = true
+	# VictoryPanel handles the full-screen display via its own EventBus connection
+	var civ_name: String = details.get("civ_name", "Unknown")
+	_log("[color=#fd5][VICTORY] %s achieves %s victory[/color]" % [civ_name, victory_type])
+
+
+func _on_game_lost(reason: String, _details: Dictionary) -> void:
+	_pause_auto_play()
+	game_ended = true
+	# VictoryPanel handles the full-screen display via its own EventBus connection
+	advance_button.disabled = true
+	play_btn.disabled = true
+	speed_5x_button.disabled = true
+	speed_10x_button.disabled = true
+	_log("[color=#f33][DEFEAT] Your civilization has fallen (%s)[/color]" % reason)
+
+
 # ==================== INFO PANELS ====================
 
 func _build_info_panels() -> void:
@@ -1082,3 +1193,37 @@ func _build_info_panels() -> void:
 
 	var timeline := TimelinePanel.new()
 	add_child(timeline)
+
+	var town_panel := TownPanel.new()
+	town_panel.name = "TownPanel"
+	add_child(town_panel)
+
+	var victory_panel := VictoryPanel.new()
+	victory_panel.name = "VictoryPanel"
+	add_child(victory_panel)
+
+	var victory_tracker := VictoryTracker.new()
+	victory_tracker.name = "VictoryTracker"
+	add_child(victory_tracker)
+
+	var pause_menu := PauseMenu.new()
+	pause_menu.name = "PauseMenu"
+	add_child(pause_menu)
+
+	# Ensure RegionPanel exists and is connected (failsafe for missing node)
+	region_panel = get_node_or_null("RegionPanel")
+	if not region_panel:
+		var region_script := load("res://scripts/ui/region_panel.gd")
+		region_panel = region_script.new()
+		region_panel.name = "RegionPanel"
+		add_child(region_panel)
+	else:
+		# Keep panel on top of HUD children
+		move_child(region_panel, get_child_count() - 1)
+
+	var sel := Callable(region_panel, "_on_region_selected")
+	if not EventBus.region_selected.is_connected(sel):
+		EventBus.region_selected.connect(sel)
+	var desel := Callable(region_panel, "_close")
+	if not EventBus.region_deselected.is_connected(desel):
+		EventBus.region_deselected.connect(desel)

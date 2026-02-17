@@ -3,15 +3,15 @@ extends Node
 ## Thin orchestrator that delegates simulation to SimulationEngine
 ## and bridges results to the presentation layer via EventBus signals.
 
-var is_processing: bool = false
+var is_turn_processing: bool = false
 
 
 func advance_year() -> void:
 	## Execute one full simulation year and emit all events as signals.
-	if is_processing:
+	if is_turn_processing:
 		return
 
-	is_processing = true
+	is_turn_processing = true
 	GameState.current_year += 1
 	GameState.clear_turn_log()
 
@@ -23,8 +23,12 @@ func advance_year() -> void:
 	# Bridge simulation events to presentation signals
 	_emit_events(events)
 
+	# Update fog of war visibility (after all events processed, before visual refresh)
+	GameState.update_all_visibility()
+	EventBus.visibility_updated.emit()
+
 	EventBus.turn_ended.emit(GameState.current_year)
-	is_processing = false
+	is_turn_processing = false
 
 
 func advance_years(count: int) -> void:
@@ -135,20 +139,114 @@ func _emit_events(events: Dictionary) -> void:
 					"description": "%s and %s declare peace" % [event["civ_a_name"], event["civ_b_name"]],
 				})
 			"infrastructure_upgrade":
+				var infra_parts: Array[String] = []
+				if event.get("food_delta", 0) != 0:
+					infra_parts.append("+%d food" % event["food_delta"])
+				if event.get("prod_delta", 0) != 0:
+					infra_parts.append("+%d prod" % event["prod_delta"])
+				if event.get("def_delta", 0.0) > 0.001:
+					infra_parts.append("+%.0f%% def" % (event["def_delta"] * 100))
+				if event.get("tier_changed", false):
+					infra_parts.append("TIER UP!")
+				elif event.get("next_tier_infra_needed", -1) > 0:
+					infra_parts.append("%d infra to next tier" % event["next_tier_infra_needed"])
+				var infra_detail := " | ".join(infra_parts) if not infra_parts.is_empty() else ""
 				EventBus.infrastructure_upgraded.emit(
 					event["civ_id"], event["region_name"], event["new_level"]
 				)
+				var infra_desc := "%s upgrades %s to level %d" % [event["civ_name"], event["region_name"], event["new_level"]]
+				if not infra_detail.is_empty():
+					infra_desc += " (%s)" % infra_detail
 				GameState.log_event("infrastructure", {
 					"civ": event["civ_name"],
 					"region": event["region_name"],
 					"level": event["new_level"],
+					"detail": infra_detail,
 				})
 				History.record_event({
 					"year": GameState.current_year, "type": "infra_upgrade",
 					"civ_id": event["civ_id"], "civ_name": event["civ_name"],
 					"region_id": event["region_id"], "region_name": event["region_name"],
-					"description": "%s upgrades %s to level %d" % [event["civ_name"], event["region_name"], event["new_level"]],
+					"description": infra_desc,
 				})
+			"town_founded":
+				EventBus.town_founded.emit(event["region_id"], event["town_name"])
+				GameState.log_event("town_founded", {
+					"civ": event["civ_name"],
+					"region": event["region_name"],
+					"town": event["town_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "town_founded",
+					"civ_id": event["civ_id"], "civ_name": event["civ_name"],
+					"region_id": event["region_id"], "region_name": event["region_name"],
+					"description": "%s founds %s in %s" % [event["civ_name"], event["town_name"], event["region_name"]],
+				})
+			"building_constructed":
+				EventBus.building_constructed.emit(
+					event["region_id"], event["town_name"], event["building_name"]
+				)
+				GameState.log_event("building_constructed", {
+					"civ": event["civ_name"],
+					"region": event["region_name"],
+					"town": event["town_name"],
+					"building": event["building_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "building_constructed",
+					"civ_id": event["civ_id"], "civ_name": event["civ_name"],
+					"region_id": event["region_id"], "region_name": event["region_name"],
+					"description": "%s builds %s in %s" % [event["civ_name"], event["building_name"], event["town_name"]],
+				})
+			"workforce_preset_changed":
+				EventBus.workforce_preset_changed.emit(
+					event["region_id"], event["town_name"], event["preset_name"]
+				)
+				GameState.log_event("workforce_changed", {
+					"civ": event["civ_name"],
+					"town": event["town_name"],
+					"preset": event["preset_name"],
+				})
+			"research_focus_changed":
+				EventBus.research_focus_changed.emit(
+					event["civ_id"], event["focus_name"]
+				)
+				GameState.log_event("research_focus_changed", {
+					"civ": event["civ_name"], "focus": event["focus_name"],
+				})
+			"spending_priority_changed":
+				EventBus.spending_priority_changed.emit(
+					event["civ_id"], event["priority_name"]
+				)
+				GameState.log_event("spending_priority_changed", {
+					"civ": event["civ_name"], "priority": event["priority_name"],
+				})
+			"alliance_formed":
+				EventBus.alliance_formed.emit(event["civ_a_id"], event["civ_b_id"])
+				GameState.log_event("alliance_formed", {
+					"civ_a": event["civ_a_name"],
+					"civ_b": event["civ_b_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "alliance_formed",
+					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
+					"description": "%s and %s form alliance" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+			"alliance_broken":
+				EventBus.alliance_broken.emit(event["civ_a_id"], event["civ_b_id"])
+				GameState.log_event("alliance_broken", {
+					"civ_a": event["civ_a_name"],
+					"civ_b": event["civ_b_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "alliance_broken",
+					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
+					"description": "%s breaks alliance with %s" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+
+	# Town auto-spawn events
+	for town_event in events["town_events"]:
+		EventBus.town_founded.emit(town_event["region_id"], town_event["town_name"])
 
 	# Battles
 	for battle in events["battles"]:
@@ -291,6 +389,19 @@ func _emit_events(events: Dictionary) -> void:
 			"description": "%s discovers %s" % [tech["civ_name"], tech["tech_name"]],
 		})
 
+	# Era transitions
+	for era in events["era_changes"]:
+		EventBus.era_changed.emit(era["civ_id"], era["era_name"])
+		GameState.log_event("era_changed", {
+			"civ": era["civ_name"],
+			"era": era["era_name"],
+		})
+		History.record_event({
+			"year": GameState.current_year, "type": "era",
+			"civ_id": era["civ_id"], "civ_name": era["civ_name"],
+			"description": "%s enters the %s era" % [era["civ_name"], era["era_name"]],
+		})
+
 	# Governance changes (no EventBus signal — history only)
 	for change in events["governance_changes"]:
 		History.record_event({
@@ -298,3 +409,20 @@ func _emit_events(events: Dictionary) -> void:
 			"civ_id": change["civ_id"], "civ_name": change["civ_name"],
 			"description": "%s: %s -> %s" % [change["civ_name"], change["old_tier"], change["new_tier"]],
 		})
+
+	# Victory/Defeat events
+	for v_event in events["victory_events"]:
+		if v_event.has("victory_type"):
+			EventBus.game_won.emit(v_event["victory_type"], v_event)
+			History.record_event({
+				"year": GameState.current_year, "type": "victory",
+				"civ_id": v_event["civ_id"], "civ_name": v_event["civ_name"],
+				"description": "%s achieves %s victory" % [v_event["civ_name"], v_event["victory_type"]],
+			})
+		elif v_event.has("defeat_reason"):
+			EventBus.game_lost.emit(v_event["defeat_reason"], v_event)
+			History.record_event({
+				"year": GameState.current_year, "type": "defeat",
+				"civ_id": v_event["civ_id"], "civ_name": v_event["civ_name"],
+				"description": "%s defeated: %s" % [v_event["civ_name"], v_event["defeat_reason"]],
+			})

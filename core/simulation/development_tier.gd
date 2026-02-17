@@ -92,3 +92,35 @@ static func get_tier_name(tier: int) -> String:
 		4: return "Industrialized"
 		5: return "Advanced"
 	return "Unknown"
+
+
+static func get_tier_progress(region: RegionData, civ: CivilizationData) -> Dictionary:
+	## Returns gate progress toward the next development tier.
+	## {"next_tier": int, "gates": {name: {current, needed, met}}, "all_met": bool}
+	var next_tier: int = region.development_tier + 1
+	if next_tier >= Constants.DEV_TIER_GATES.size():
+		return {"next_tier": -1, "gates": {}, "all_met": false}
+	var gate: Array = Constants.DEV_TIER_GATES[next_tier]
+	var pop_density := _population_density(region)
+	var gates := {
+		"infra": {"current": region.infrastructure_level, "needed": gate[0],
+				   "met": region.infrastructure_level >= gate[0]},
+		"pop_density": {"current": pop_density, "needed": gate[1],
+						"met": pop_density >= gate[1]},
+		"stability": {"current": civ.stability, "needed": gate[2],
+					   "met": civ.stability >= gate[2]},
+		"governance": {"current": civ.governance_tier, "needed": gate[3],
+					    "met": civ.governance_tier >= gate[3]},
+		"era": {"current": civ.current_era, "needed": gate[4],
+				"met": civ.current_era >= gate[4]},
+	}
+	var all_met := true
+	for key in gates:
+		if not gates[key]["met"]:
+			all_met = false
+			break
+	# Also check resource gates
+	if all_met and next_tier < Constants.DEV_TIER_RESOURCE_GATES.size():
+		if not _meets_resource_gate(next_tier, civ):
+			all_met = false
+	return {"next_tier": next_tier, "gates": gates, "all_met": all_met}

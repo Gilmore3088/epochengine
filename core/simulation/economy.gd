@@ -74,6 +74,7 @@ static func calculate_production_output(
 
 static func calculate_food_consumption(civ: CivilizationData) -> int:
 	## Food consumed by population. 1 food per FOOD_PER_POP_DIVISOR population.
+	@warning_ignore("integer_division")
 	return civ.total_population / Constants.FOOD_PER_POP_DIVISOR
 
 
@@ -93,13 +94,17 @@ static func process_economy(civ: CivilizationData, owned_regions: Array[RegionDa
 	var military_upkeep := calculate_military_upkeep(civ)
 	var prod_net := prod_produced - military_upkeep
 
-	# Apply to stockpiles
+	# Apply spending priority multipliers
+	var sp: Dictionary = Constants.SPENDING_PRIORITIES.get(
+		civ.spending_priority, Constants.SPENDING_PRIORITIES[0])
+
+	# Apply to stockpiles (food_net and prod_net scaled by spending priority)
 	var old_food := civ.food_stockpile
 	var old_prod := civ.production_stockpile
 	var old_military := civ.military_strength
 
-	civ.food_stockpile += food_net
-	civ.production_stockpile += prod_net
+	civ.food_stockpile += int(float(food_net) * sp["food"])
+	civ.production_stockpile += int(float(prod_net) * sp["production"])
 
 	# Military replenishment from remaining production surplus
 	# Infrastructure boosts reinforcement rate
@@ -114,10 +119,14 @@ static func process_economy(civ: CivilizationData, owned_regions: Array[RegionDa
 	var reinforcement := 0.0
 	if civ.production_stockpile > 0:
 		reinforcement = minf(
-			float(civ.production_stockpile) * Constants.MILITARY_REINFORCE_RATE * infra_reinforce_mod,
+			float(civ.production_stockpile) * Constants.MILITARY_REINFORCE_RATE * infra_reinforce_mod * sp["military"],
 			Constants.MILITARY_REINFORCE_MAX,
 		)
 		civ.military_strength += reinforcement
+
+	# Decrement spending priority cooldown
+	if civ.spending_priority_cooldown > 0:
+		civ.spending_priority_cooldown -= 1
 
 	# Detect shortages
 	var food_shortage := civ.food_stockpile < Constants.SHORTAGE_THRESHOLD
@@ -139,7 +148,7 @@ static func process_economy(civ: CivilizationData, owned_regions: Array[RegionDa
 	}
 
 
-static func calculate_expansion_cost(civ: CivilizationData, region_count: int) -> int:
+static func calculate_expansion_cost(_civ: CivilizationData, region_count: int) -> int:
 	## Production cost to expand into a new region.
 	## Escalates with number of owned regions (snowball control).
 	var base_cost := Constants.EXPANSION_BASE_PRODUCTION_COST
@@ -162,6 +171,7 @@ static func pay_expansion_cost(
 	civ.production_stockpile -= cost
 
 	# Move settlers from source region
+	@warning_ignore("integer_division")
 	var settlers := mini(source_region.population / 4, Constants.EXPANSION_SETTLER_POP)
 	source_region.population -= settlers
 

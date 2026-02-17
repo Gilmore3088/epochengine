@@ -289,3 +289,35 @@ func test_urbanization_level_updated_on_promotion() -> void:
 	DevelopmentTierSimulation.evaluate_development(region, civ)
 	assert_almost_eq(region.urbanization_level, 3.0 / 5.0, 0.001,
 		"Urbanization level should be tier/5.0 after promotion")
+
+
+# --- Tier Progress (Almost There) ---
+
+func test_tier_progress_returns_gates() -> void:
+	# Tier 0 region: next tier is 1, which needs pop_density >= 0.10, stability >= 25
+	var region := _make_region(Enums.TerrainType.PLAINS, 0, 500)  # density 0.05
+	var civ := _make_civ(30.0)
+	var result := DevelopmentTierSimulation.get_tier_progress(region, civ)
+	assert_eq(result["next_tier"], 1)
+	assert_true(result["gates"].has("infra"))
+	assert_true(result["gates"].has("pop_density"))
+	assert_true(result["gates"].has("stability"))
+	assert_true(result["gates"].has("governance"))
+	assert_true(result["gates"].has("era"))
+	# Infra gate: need 0 (tier 1 needs 0), have 0 → met
+	assert_true(result["gates"]["infra"]["met"], "Infra gate should be met (need 0)")
+	# Pop density: 500/10000 = 0.05 < 0.10 → not met
+	assert_false(result["gates"]["pop_density"]["met"], "Pop density 0.05 < 0.10 should not be met")
+	# Stability: 30 >= 25 → met
+	assert_true(result["gates"]["stability"]["met"], "Stability 30 >= 25 should be met")
+	# Not all met (pop density fails)
+	assert_false(result["all_met"])
+
+
+func test_tier_progress_all_met() -> void:
+	# Plains capacity 10000. Pop 1200 -> density 0.12 >= 0.10
+	var region := _make_region(Enums.TerrainType.PLAINS, 0, 1200)
+	var civ := _make_civ(50.0)
+	var result := DevelopmentTierSimulation.get_tier_progress(region, civ)
+	assert_eq(result["next_tier"], 1)
+	assert_true(result["all_met"], "All gates for tier 1 should be met")

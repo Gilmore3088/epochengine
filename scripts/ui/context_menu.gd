@@ -10,6 +10,8 @@ const ITEM_DECLARE_WAR := 0
 const ITEM_SEEK_PEACE := 1
 const ITEM_SEEK_ALLIANCE := 2
 const ITEM_UPGRADE_INFRA := 3
+const ITEM_FOUND_TOWN := 4
+const ITEM_CLAIM_REGION := 5
 
 
 func _ready() -> void:
@@ -60,6 +62,11 @@ func show_for_region(region_id: int, screen_pos: Vector2) -> void:
 
 
 func _populate_menu(region: RegionData, player_civ: CivilizationData) -> void:
+	# No actions on regions the player can't see (fog of war)
+	var vis := GameState.get_player_visibility(region.id)
+	if vis != Enums.VisibilityState.VISIBLE:
+		return
+
 	var player_id := player_civ.id
 
 	if region.owner_id == player_id:
@@ -70,10 +77,22 @@ func _populate_menu(region: RegionData, player_civ: CivilizationData) -> void:
 			add_item("Upgrade Infrastructure (-%d prod)" % cost, ITEM_UPGRADE_INFRA)
 			if not can_afford:
 				set_item_disabled(item_count - 1, true)
+		if TownSimulation.can_found_town(region, player_civ):
+			var town_cost := TownSimulation.calculate_town_cost(region)
+			add_item("Found Town (-%d prod)" % town_cost, ITEM_FOUND_TOWN)
+			if player_civ.production_stockpile < town_cost:
+				set_item_disabled(item_count - 1, true)
 		return
 
 	if region.owner_id < 0:
-		# Neutral region - no actions available
+		# Neutral region - offer claim if adjacent to player territory
+		if _is_adjacent_to_player(region, player_civ):
+			var region_count := GameState.get_regions_by_owner(player_id).size()
+			var cost := EconomySimulation.calculate_expansion_cost(player_civ, region_count)
+			var can_afford := EconomySimulation.can_afford_expansion(player_civ, region_count)
+			add_item("Claim Region (-%d prod)" % cost, ITEM_CLAIM_REGION)
+			if not can_afford:
+				set_item_disabled(item_count - 1, true)
 		return
 
 	# Region belongs to another civ
@@ -91,6 +110,14 @@ func _populate_menu(region: RegionData, player_civ: CivilizationData) -> void:
 			add_item("Propose Alliance with %s" % owner_civ.civ_name, ITEM_SEEK_ALLIANCE)
 
 
+func _is_adjacent_to_player(region: RegionData, player_civ: CivilizationData) -> bool:
+	for neighbor_id in region.adjacency_list:
+		var neighbor := GameState.get_region(neighbor_id)
+		if neighbor and neighbor.owner_id == player_civ.id:
+			return true
+	return false
+
+
 func _on_item_pressed(id: int) -> void:
 	var region := GameState.get_region(target_region_id)
 	if not region:
@@ -106,6 +133,10 @@ func _on_item_pressed(id: int) -> void:
 			action = {"type": "seek_alliance", "target_civ_id": region.owner_id}
 		ITEM_UPGRADE_INFRA:
 			action = {"type": "invest_infrastructure", "region_id": target_region_id}
+		ITEM_FOUND_TOWN:
+			action = {"type": "found_town", "region_id": target_region_id}
+		ITEM_CLAIM_REGION:
+			action = {"type": "claim_region", "region_id": target_region_id}
 		_:
 			return
 

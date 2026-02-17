@@ -161,3 +161,113 @@ func test_metrics_decay_with_low_pop() -> void:
 	# but with very low pop, the net should be minimal
 	assert_true(civ.knowledge <= 50.1,
 		"Knowledge should barely grow or decay with low population")
+
+
+# --- Research Focus ---
+
+func test_research_focus_default_balanced() -> void:
+	var civ := _make_civ()
+	assert_eq(civ.research_focus, 0, "Default research focus should be 0 (Balanced)")
+	assert_eq(civ.research_focus_cooldown, 0, "Default cooldown should be 0")
+
+
+func test_research_focus_boosts_knowledge() -> void:
+	var civ_normal := _make_civ()
+	civ_normal.total_population = 10000
+	civ_normal.stability = 80.0
+	var regions: Array[RegionData] = [
+		RegionData.new(0, "R1", Enums.TerrainType.PLAINS),
+	]
+	regions[0].owner_id = 0
+
+	TechEmergence.update_hidden_metrics(civ_normal, regions)
+	var knowledge_normal := civ_normal.knowledge
+
+	var civ_focused := _make_civ()
+	civ_focused.total_population = 10000
+	civ_focused.stability = 80.0
+	civ_focused.research_focus = 1  # Knowledge focus
+
+	TechEmergence.update_hidden_metrics(civ_focused, regions)
+	var knowledge_focused := civ_focused.knowledge
+
+	assert_true(knowledge_focused > knowledge_normal,
+		"Knowledge focus should produce higher knowledge growth (%.3f vs %.3f)" % [knowledge_focused, knowledge_normal])
+	# Should be approximately 2x the growth
+	assert_almost_eq(knowledge_focused, knowledge_normal * 2.0, 0.01)
+
+
+# --- Tech Proximity ---
+
+func test_next_tech_proximity_sorted() -> void:
+	# Civ close to Irrigation (knowledge 20, social 30, economic 20)
+	var civ := _make_civ(18.0, 0.0, 28.0, 19.0, 0.0)
+	var results := TechEmergence.get_next_tech_proximity(civ)
+	assert_true(results.size() > 0, "Should have undiscovered techs")
+	# Results should be sorted by fewest gaps first
+	for i in range(results.size() - 1):
+		assert_true(results[i]["gaps"].size() <= results[i + 1]["gaps"].size(),
+			"Results should be sorted by gap count ascending")
+	# Irrigation should be near the top (3 gaps, all close)
+	var irrigation_found := false
+	for entry in results:
+		if entry["name"] == "Irrigation":
+			irrigation_found = true
+			assert_eq(entry["gaps"].size(), 3, "Irrigation should have 3 gaps")
+			break
+	assert_true(irrigation_found, "Irrigation should appear in results")
+
+
+func test_next_tech_proximity_empty_when_all_discovered() -> void:
+	var civ := _make_civ(100.0, 100.0, 100.0, 100.0, 100.0)
+	# Discover all techs
+	for tech in TechEmergence.TECH_TABLE:
+		civ.technologies.append(tech["name"])
+	var results := TechEmergence.get_next_tech_proximity(civ)
+	assert_eq(results.size(), 0, "No proximity info when all techs discovered")
+
+
+func test_research_focus_cooldown_decrements() -> void:
+	var civ := _make_civ()
+	civ.total_population = 10000
+	civ.stability = 50.0
+	civ.research_focus_cooldown = 3
+	var regions: Array[RegionData] = [
+		RegionData.new(0, "R1", Enums.TerrainType.PLAINS),
+	]
+	regions[0].owner_id = 0
+
+	TechEmergence.update_hidden_metrics(civ, regions)
+	assert_eq(civ.research_focus_cooldown, 2, "Cooldown should decrement by 1 per turn")
+
+	TechEmergence.update_hidden_metrics(civ, regions)
+	assert_eq(civ.research_focus_cooldown, 1)
+
+	TechEmergence.update_hidden_metrics(civ, regions)
+	assert_eq(civ.research_focus_cooldown, 0)
+
+	TechEmergence.update_hidden_metrics(civ, regions)
+	assert_eq(civ.research_focus_cooldown, 0, "Should not go negative")
+
+
+func test_era_change_at_three_techs() -> void:
+	# 2 techs = Prehistoric, 3 techs = Classical
+	assert_eq(TechEmergence.compute_era(2), Enums.Epoch.PREHISTORIC,
+		"2 techs should be Prehistoric")
+	assert_eq(TechEmergence.compute_era(3), Enums.Epoch.CLASSICAL,
+		"3 techs should be Classical")
+
+
+func test_era_no_change_within_same_tier() -> void:
+	# 0-2 techs all Prehistoric — no era change
+	for i in range(3):
+		assert_eq(TechEmergence.compute_era(i), Enums.Epoch.PREHISTORIC,
+			"%d techs should be Prehistoric" % i)
+
+
+func test_tech_table_entries_have_names() -> void:
+	assert_gt(TechEmergence.TECH_TABLE.size(), 0, "TECH_TABLE should not be empty")
+	for tech in TechEmergence.TECH_TABLE:
+		assert_true(tech.has("name"), "Each tech entry must have a 'name' key")
+		assert_true(tech["name"] is String, "Tech name must be a String")
+		assert_gt(tech["name"].length(), 0, "Tech name must not be empty")

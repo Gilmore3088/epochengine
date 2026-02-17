@@ -5,14 +5,16 @@ extends RefCounted
 ## Creates visual markers (peaks, rivers, trees, etc.) inside region polygons
 ## as a fallback when no terrain texture is available.
 
-# Terrain decoration colors (subtle, semi-transparent)
-const DECO_COLOR_MOUNTAIN := Color(0.25, 0.22, 0.18, 0.30)
-const DECO_COLOR_RIVER := Color(0.20, 0.35, 0.50, 0.25)
-const DECO_COLOR_JUNGLE := Color(0.12, 0.25, 0.10, 0.28)
-const DECO_COLOR_DESERT := Color(0.50, 0.42, 0.25, 0.18)
-const DECO_COLOR_COAST := Color(0.25, 0.38, 0.50, 0.22)
-const DECO_COLOR_TUNDRA := Color(0.55, 0.58, 0.62, 0.20)
-const DECO_COLOR_PLAINS := Color(0.35, 0.42, 0.25, 0.20)
+# Terrain decoration colors (semi-transparent)
+const DECO_COLOR_MOUNTAIN := Color(0.25, 0.22, 0.18, 0.38)
+const DECO_COLOR_RIVER := Color(0.20, 0.35, 0.50, 0.32)
+const DECO_COLOR_JUNGLE := Color(0.12, 0.25, 0.10, 0.36)
+const DECO_COLOR_DESERT := Color(0.50, 0.42, 0.25, 0.24)
+const DECO_COLOR_COAST := Color(0.25, 0.38, 0.50, 0.28)
+const DECO_COLOR_TUNDRA := Color(0.55, 0.58, 0.62, 0.26)
+const DECO_COLOR_PLAINS := Color(0.35, 0.42, 0.25, 0.26)
+const DECO_COLOR_STEPPE := Color(0.50, 0.45, 0.28, 0.22)
+const DECO_COLOR_VOLCANIC := Color(0.40, 0.22, 0.15, 0.25)
 
 
 static func build(
@@ -40,6 +42,10 @@ static func build(
 			_draw_tundra_marks(centroid, rng, parent)
 		Enums.TerrainType.PLAINS:
 			_draw_plains_grass(centroid, rng, parent)
+		Enums.TerrainType.STEPPE:
+			_draw_steppe_grass(centroid, rng, parent)
+		Enums.TerrainType.VOLCANIC_RIDGE:
+			_draw_volcanic_vents(centroid, rng, parent)
 
 
 static func _draw_mountain_peaks(
@@ -184,3 +190,60 @@ static func _draw_plains_grass(
 		line.width = 1.0
 		line.default_color = DECO_COLOR_PLAINS
 		parent.add_child(line)
+
+
+static func _draw_steppe_grass(
+	centroid: Vector2, rng: RandomNumberGenerator, parent: Node2D,
+) -> void:
+	# Sparse diagonal strokes — wider spread than plains, windswept look
+	for i in 4:
+		var offset := Vector2(
+			rng.randf_range(-40, 40), rng.randf_range(-28, 28)
+		)
+		var base := centroid + offset
+		var lean := rng.randf_range(3, 6)
+		var line := Line2D.new()
+		line.points = PackedVector2Array([
+			base,
+			base + Vector2(lean, -rng.randf_range(5, 10)),
+		])
+		line.width = 1.0
+		line.default_color = DECO_COLOR_STEPPE
+		parent.add_child(line)
+
+
+static func _draw_volcanic_vents(
+	centroid: Vector2, rng: RandomNumberGenerator, parent: Node2D,
+) -> void:
+	# Dark irregular rock shapes + orange glow dots
+	for i in 4:
+		var offset := Vector2(
+			rng.randf_range(-30, 30), rng.randf_range(-22, 22)
+		)
+		var pos := centroid + offset
+		var rock_size := rng.randf_range(3, 6)
+		var sides := rng.randi_range(3, 5)
+		var rock := Polygon2D.new()
+		var pts := PackedVector2Array()
+		for j in sides:
+			var angle := float(j) * TAU / float(sides) + rng.randf_range(-0.3, 0.3)
+			var r := rock_size * rng.randf_range(0.6, 1.0)
+			pts.append(pos + Vector2(cos(angle), sin(angle)) * r)
+		rock.polygon = pts
+		rock.color = DECO_COLOR_VOLCANIC
+		parent.add_child(rock)
+
+	# Orange vent glow dots
+	for i in 3:
+		var offset := Vector2(
+			rng.randf_range(-20, 20), rng.randf_range(-15, 15)
+		)
+		var pos := centroid + offset
+		var dot := Polygon2D.new()
+		var dot_pts := PackedVector2Array()
+		for j in 6:
+			var angle := float(j) * TAU / 6.0
+			dot_pts.append(pos + Vector2(cos(angle), sin(angle)) * 1.8)
+		dot.polygon = dot_pts
+		dot.color = Color(0.85, 0.45, 0.15, 0.20)
+		parent.add_child(dot)

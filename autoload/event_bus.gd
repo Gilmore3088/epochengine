@@ -1,7 +1,9 @@
+@warning_ignore("unused_signal")
 extends Node
 
 ## Global signal bus for decoupled communication between systems.
 ## All cross-system signals go through EventBus.
+## Signals are emitted from TurnManager and connected by UI scripts.
 
 # --- Turn Lifecycle ---
 signal turn_started(year: int)
@@ -38,6 +40,7 @@ signal golden_age_ended(civ_id: int)
 
 # --- Tech Emergence ---
 signal technology_emerged(civ_id: int, tech_name: String)
+signal era_changed(civ_id: int, era_name: String)
 
 # --- AI ---
 signal ai_decision_made(civ_id: int, decision_type: String, details: Dictionary)
@@ -65,6 +68,20 @@ signal resource_maintenance_failure(civ_id: int, resource_name: String, missing_
 # --- Towns ---
 signal town_founded(region_id: int, town_name: String)
 signal building_constructed(region_id: int, town_name: String, building_type: String)
+signal workforce_preset_changed(region_id: int, town_name: String, preset_name: String)
+signal open_town_detail(region_id: int, town_index: int)
+
+# --- Strategy ---
+signal research_focus_changed(civ_id: int, focus_name: String)
+signal spending_priority_changed(civ_id: int, priority_name: String)
+
+# --- Victory/Defeat ---
+signal game_won(victory_type: String, details: Dictionary)
+signal game_lost(reason: String, details: Dictionary)
+
+# --- Visibility (Fog of War) ---
+signal region_explored(civ_id: int, region_id: int)
+signal visibility_updated()
 
 # --- UI ---
 signal region_selected(region_id: int)

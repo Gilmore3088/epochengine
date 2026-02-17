@@ -50,6 +50,17 @@ extends Resource
 @export var resource_stockpiles: Dictionary = {}  # {resource_type_int: amount}
 @export var resource_production_log: Dictionary = {}  # {resource_type_int: last_turn_production}
 
+# Research focus and spending priority (Player Agency Sprint)
+@export var research_focus: int = 0  # 0=Balanced, 1=Knowledge, 2=Energy, 3=Social, 4=Economic, 5=Military
+@export var research_focus_cooldown: int = 0  # years remaining before can change
+@export var spending_priority: int = 0  # 0=Balanced, 1=Growth, 2=Production, 3=Military
+@export var spending_priority_cooldown: int = 0  # years remaining before can change
+
+# Fog of War visibility tracking (player-only for V0.1)
+@export var explored_regions: Array[int] = []  # Permanently explored region IDs (saved)
+var explored_set: Dictionary = {}              # {region_id: true} O(1) lookup cache
+var visible_regions: Dictionary = {}           # {region_id: true} computed each turn (not saved)
+
 
 func _init(
 	p_id: int = -1,

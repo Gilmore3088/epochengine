@@ -75,6 +75,7 @@ static func calculate_resource_yields(
 		var tier_mult: float = DevelopmentTierSimulation.get_economy_multiplier(
 			region.development_tier
 		)
+		@warning_ignore("integer_division")
 		var infra_bonus: int = region.infrastructure_level / 2  # +1 per 2 levels
 		var degradation_mult: float = 1.0 - region.renewable_degradation
 

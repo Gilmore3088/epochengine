@@ -19,6 +19,7 @@ var is_selected: bool = false
 var current_zoom: float = 1.0
 var _has_texture: bool = false
 var _local_points: PackedVector2Array
+var _current_visibility: Enums.VisibilityState = Enums.VisibilityState.VISIBLE
 
 # Muted terrain tint colors (blended under political color in fallback mode)
 const TERRAIN_TINTS := {
@@ -46,8 +47,8 @@ const TERRAIN_COLORS := {
 	Enums.TerrainType.VOLCANIC_RIDGE: Color(0.45, 0.35, 0.30),
 }
 
-const NEUTRAL_BASE := Color(0.60, 0.56, 0.46)
-const TERRAIN_BLEND := 0.18
+const NEUTRAL_BASE := Color(0.55, 0.52, 0.42)
+const TERRAIN_BLEND := 0.35
 const HOVER_LIGHTEN := 0.08
 const SELECT_LIGHTEN := 0.12
 
@@ -59,6 +60,10 @@ const SELECT_MARKER_SIZE := 5.0
 
 # Dim base color for heatmap overlays when textured
 const HEATMAP_BASE_DIM := Color(0.7, 0.7, 0.7)
+
+# Fog of war constants
+const FOG_COLOR := Color(0.18, 0.16, 0.13, 1.0)  # Dark parchment fog
+const EXPLORED_MODULATE := Color(0.65, 0.65, 0.70, 1.0)  # Cool desaturated tint
 
 
 func initialize(data: RegionData, points: PackedVector2Array) -> void:
@@ -158,13 +163,15 @@ func initialize(data: RegionData, points: PackedVector2Array) -> void:
 func _apply_terrain_texture(points: PackedVector2Array) -> bool:
 	## Apply a tiling terrain texture to this region's polygon.
 	## Returns true if a texture was applied, false to fall back to procedural.
-	var tex_path: String = Constants.TERRAIN_TEXTURE_PATHS.get(
-		region_data.terrain_type, ""
-	)
-	if tex_path.is_empty():
-		return false
+	var terrain_int: int = region_data.terrain_type
+	var tex_path: String = Constants.TERRAIN_TEXTURE_PATHS.get(terrain_int, "")
 
-	var tex: Texture2D = load(tex_path)
+	var tex: Texture2D
+	if not tex_path.is_empty():
+		tex = load(tex_path)
+	else:
+		tex = TerrainTextureGenerator.get_texture(terrain_int)
+
 	if not tex:
 		return false
 
@@ -226,19 +233,45 @@ func update_appearance() -> void:
 	if not polygon or not region_data:
 		return
 
+	_current_visibility = GameState.get_player_visibility(region_data.id)
+
+	# Reset self_modulate before rendering (prevents desaturation compounding)
+	self_modulate = Color.WHITE
+
+	if _current_visibility == Enums.VisibilityState.HIDDEN:
+		_render_hidden()
+		return
+
+	# Restore texture if previously hidden (null'd by _render_hidden)
+	if _has_texture and polygon.texture == null:
+		_apply_terrain_texture(_local_points)
+
 	match GameState.current_overlay:
 		Enums.MapOverlay.POLITICAL:
 			_render_political()
 		Enums.MapOverlay.TERRAIN:
 			_render_terrain()
 		Enums.MapOverlay.RESOURCES:
+			if _current_visibility == Enums.VisibilityState.EXPLORED:
+				_render_hidden()
+				return
 			_render_resources()
 		Enums.MapOverlay.SUPPLY_LINES:
+			if _current_visibility == Enums.VisibilityState.EXPLORED:
+				_render_hidden()
+				return
 			_render_supply()
 		Enums.MapOverlay.ALLIANCES:
+			if _current_visibility == Enums.VisibilityState.EXPLORED:
+				_render_hidden()
+				return
 			_render_fronts()
 		_:
 			_render_political()
+
+	# Apply explored desaturation via self_modulate (no compounding)
+	if _current_visibility == Enums.VisibilityState.EXPLORED:
+		self_modulate = EXPLORED_MODULATE
 
 	_apply_interaction_feedback()
 
@@ -247,7 +280,7 @@ func update_appearance() -> void:
 	if select_marker:
 		select_marker.visible = is_selected
 
-	# Terrain decorations: visible in political/terrain when no texture
+	# Terrain decorations: visible in political/terrain when no texture and not hidden
 	if terrain_deco:
 		var overlay_shows_deco := (
 			GameState.current_overlay == Enums.MapOverlay.POLITICAL
@@ -270,6 +303,23 @@ func _apply_interaction_feedback() -> void:
 		tint_overlay.color = tint_overlay.color.lightened(delta)
 	else:
 		polygon.color = polygon.color.lightened(delta)
+
+
+# --- Fog of War ---
+
+func _render_hidden() -> void:
+	## Render region as dark fog: no texture, no label, no decorations.
+	polygon.texture = null
+	polygon.color = FOG_COLOR
+	tint_overlay.visible = false
+	if terrain_deco:
+		terrain_deco.visible = false
+	if label:
+		label.visible = false
+	if select_outline:
+		select_outline.visible = false
+	if select_marker:
+		select_marker.visible = false
 
 
 # --- Overlay Renderers ---
@@ -307,7 +357,7 @@ func _render_political() -> void:
 				var base_color := civ.color.lerp(terrain_tint, TERRAIN_BLEND)
 				polygon.color = base_color.lightened(variation)
 				return
-		polygon.color = NEUTRAL_BASE.lerp(terrain_tint, 0.3).lightened(variation)
+		polygon.color = NEUTRAL_BASE.lerp(terrain_tint, 0.45).lightened(variation)
 
 
 func _render_terrain() -> void:
@@ -470,6 +520,9 @@ func _region_color_variation() -> float:
 func _update_label_style() -> void:
 	if not label:
 		return
+	if _current_visibility == Enums.VisibilityState.HIDDEN:
+		label.visible = false
+		return
 	label.visible = is_selected or current_zoom > 0.6
 	if is_selected:
 		label.add_theme_font_override("font", UITheme.get_header_font())
@@ -484,6 +537,8 @@ func _update_label_style() -> void:
 # --- Input Handlers ---
 
 func _on_mouse_entered() -> void:
+	if _current_visibility == Enums.VisibilityState.HIDDEN:
+		return
 	is_hovered = true
 	update_appearance()
 

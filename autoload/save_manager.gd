@@ -139,6 +139,11 @@ func _create_save_data() -> Resource:
 			"technologies": civ.technologies,
 			"resource_stockpiles": civ.resource_stockpiles,
 			"resource_production_log": civ.resource_production_log,
+			"research_focus": civ.research_focus,
+			"research_focus_cooldown": civ.research_focus_cooldown,
+			"spending_priority": civ.spending_priority,
+			"spending_priority_cooldown": civ.spending_priority_cooldown,
+			"explored_regions": civ.explored_regions,
 		})
 	save.set_meta("civilizations", civ_list)
 
@@ -230,6 +235,23 @@ func _restore_save_data(save: Resource) -> void:
 		civ.technologies = data["technologies"]
 		civ.resource_stockpiles = data.get("resource_stockpiles", {})
 		civ.resource_production_log = data.get("resource_production_log", {})
+		civ.research_focus = data.get("research_focus", 0)
+		civ.research_focus_cooldown = data.get("research_focus_cooldown", 0)
+		civ.spending_priority = data.get("spending_priority", 0)
+		civ.spending_priority_cooldown = data.get("spending_priority_cooldown", 0)
+		# Fog of war: restore explored regions and rebuild O(1) lookup cache
+		var saved_explored: Array = data.get("explored_regions", [])
+		civ.explored_regions.clear()
+		civ.explored_set.clear()
+		if saved_explored.is_empty() and GameState.current_year > 1:
+			# Old save migration: pre-fog saves get all regions marked explored
+			for region_id in GameState.regions:
+				civ.explored_regions.append(region_id)
+				civ.explored_set[region_id] = true
+		else:
+			for rid in saved_explored:
+				civ.explored_regions.append(rid)
+				civ.explored_set[rid] = true
 		GameState.civilizations[civ.id] = civ
 
 	# Restore heroes

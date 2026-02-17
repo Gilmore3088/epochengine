@@ -111,23 +111,26 @@ func test_world_space_uv_uses_global_position() -> void:
 
 # --- Fallback Behavior ---
 
-func test_has_texture_false_when_path_empty() -> void:
-	# All TERRAIN_TEXTURE_PATHS are empty strings, so _has_texture should be false
+func test_has_texture_true_with_generated_fallback() -> void:
+	# Generated textures now provide fallback when paths are empty
 	var visual := RegionVisual.new()
 	visual.region_data = _make_region(0)
-	# Can't call initialize() without scene tree, test _apply_terrain_texture directly
+	visual.polygon = Polygon2D.new()
 	var result := visual._apply_terrain_texture(_make_points())
-	assert_false(result, "_apply_terrain_texture should return false for empty path")
+	assert_true(result, "_apply_terrain_texture should return true with generated texture")
+	visual.polygon.free()
 	visual.free()
 
 
-func test_has_texture_false_for_all_terrain_types() -> void:
+func test_has_texture_true_for_all_terrain_types() -> void:
 	for terrain_int in range(9):
 		var visual := RegionVisual.new()
 		visual.region_data = _make_region(terrain_int, terrain_int as Enums.TerrainType)
+		visual.polygon = Polygon2D.new()
 		var result := visual._apply_terrain_texture(_make_points())
-		assert_false(result,
-			"Terrain type %d should have no texture loaded" % terrain_int)
+		assert_true(result,
+			"Terrain type %d should have generated texture" % terrain_int)
+		visual.polygon.free()
 		visual.free()
 
 
@@ -210,7 +213,7 @@ func test_decorations_build_adds_children_for_river() -> void:
 	parent.queue_free()
 
 
-func test_decorations_build_noop_for_steppe() -> void:
+func test_decorations_build_steppe_has_children() -> void:
 	var parent := Node2D.new()
 	add_child(parent)
 	TerrainDecorations.build(
@@ -219,8 +222,22 @@ func test_decorations_build_noop_for_steppe() -> void:
 		5,
 		parent,
 	)
-	assert_eq(parent.get_child_count(), 0,
-		"STEPPE should add no decorations")
+	assert_gt(parent.get_child_count(), 0,
+		"STEPPE should add grass decorations")
+	parent.queue_free()
+
+
+func test_decorations_build_volcanic_has_children() -> void:
+	var parent := Node2D.new()
+	add_child(parent)
+	TerrainDecorations.build(
+		Enums.TerrainType.VOLCANIC_RIDGE,
+		Vector2.ZERO,
+		6,
+		parent,
+	)
+	assert_gt(parent.get_child_count(), 0,
+		"VOLCANIC_RIDGE should add vent decorations")
 	parent.queue_free()
 
 
@@ -277,3 +294,50 @@ func test_override_dicts_cover_all_terrain_types() -> void:
 		"Tile scale override should have 9 entries (one per terrain type)")
 	assert_eq(Constants.TERRAIN_TINT_ALPHA_OVERRIDE.size(), 9,
 		"Tint alpha override should have 9 entries (one per terrain type)")
+
+
+# --- TerrainTextureGenerator ---
+
+func test_terrain_texture_generator_returns_texture() -> void:
+	for terrain_int in range(9):
+		var tex := TerrainTextureGenerator.get_texture(terrain_int)
+		assert_not_null(tex,
+			"Terrain type %d should return a non-null texture" % terrain_int)
+
+
+func test_terrain_texture_generator_deterministic() -> void:
+	# Clear cache to force re-generation
+	TerrainTextureGenerator._cache.clear()
+	var tex1 := TerrainTextureGenerator.get_texture(2)
+	# Second call should return cached texture (same instance)
+	var tex2 := TerrainTextureGenerator.get_texture(2)
+	assert_eq(tex1, tex2,
+		"Same terrain type should return the same cached texture")
+
+
+# --- Fog of War Rendering ---
+
+func test_hidden_region_gets_fog_color() -> void:
+	var visual := RegionVisual.new()
+	visual.region_data = _make_region(0)
+	visual.polygon = Polygon2D.new()
+	visual.tint_overlay = Polygon2D.new()
+	visual._render_hidden()
+	assert_eq(visual.polygon.color, RegionVisual.FOG_COLOR,
+		"Hidden region should render with FOG_COLOR")
+	assert_null(visual.polygon.texture,
+		"Hidden region should have null texture")
+	assert_false(visual.tint_overlay.visible,
+		"Hidden region should hide tint overlay")
+	visual.tint_overlay.free()
+	visual.polygon.free()
+	visual.free()
+
+
+func test_explored_modulate_applied() -> void:
+	# EXPLORED_MODULATE should be a desaturated color (not white, not zero)
+	var mod := RegionVisual.EXPLORED_MODULATE
+	assert_true(mod.r < 1.0, "EXPLORED_MODULATE red should be less than 1.0")
+	assert_true(mod.g < 1.0, "EXPLORED_MODULATE green should be less than 1.0")
+	assert_true(mod.r > 0.0, "EXPLORED_MODULATE red should be greater than 0.0")
+	assert_eq(mod.a, 1.0, "EXPLORED_MODULATE alpha should be 1.0")

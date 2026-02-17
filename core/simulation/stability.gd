@@ -51,10 +51,22 @@ static func recalculate(civ: CivilizationData, owned_regions: Array[RegionData])
 	# Infrastructure provides a stability floor (developed civs resist total collapse)
 	var infra_floor := _average_infrastructure(owned_regions) * Constants.INFRA_STABILITY_FLOOR_PER_LEVEL
 
+	# Town building stability bonus (Markets, Monuments)
+	var town_stab_bonus := 0.0
+	for region in owned_regions:
+		town_stab_bonus += TownSimulation.aggregate_region_stability_bonus(region)
+
+	# Town deficit penalty (towns where upkeep > supply-scaled production)
+	var town_deficit_penalty := 0.0
+	for region in owned_regions:
+		var deficit_info := TownSimulation.compute_region_deficit_info(region)
+		town_deficit_penalty += float(deficit_info["deficit_towns"]) * Constants.DEFICIT_STABILITY_PENALTY_PER_TOWN
+
 	var new_stability := (
 		base + food_factor - war_exhaust - shortage
 		+ hero_mod - overextension - disconnected + political
 		+ mean_reversion
+		+ town_stab_bonus - town_deficit_penalty
 	)
 	new_stability = clampf(new_stability, Constants.STABILITY_MIN, Constants.STABILITY_MAX)
 	new_stability = maxf(new_stability, golden_floor)
@@ -97,7 +109,7 @@ static func _war_exhaustion(civ: CivilizationData) -> float:
 
 
 static func _resource_shortage_penalty(
-	civ: CivilizationData, owned_regions: Array[RegionData]
+	civ: CivilizationData, _owned_regions: Array[RegionData]
 ) -> float:
 	## Penalty when food or production stockpiles are significantly negative.
 	## Only kicks in below -20 to avoid punishing minor deficits.

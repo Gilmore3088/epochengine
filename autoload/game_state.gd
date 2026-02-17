@@ -66,6 +66,7 @@ func _load_regions() -> void:
 			"res://data/regions/" + fname, "", ResourceLoader.CACHE_MODE_IGNORE
 		)
 		if region:
+			region.initialize_deposits()
 			regions[region.id] = region
 
 
@@ -226,3 +227,53 @@ func get_player_civ() -> CivilizationData:
 
 func is_player_civ(civ_id: int) -> bool:
 	return civ_id == player_civ_id
+
+
+# --- Visibility (Fog of War) ---
+
+func get_visibility(civ_id: int, region_id: int) -> Enums.VisibilityState:
+	var civ := get_civilization(civ_id)
+	if not civ:
+		return Enums.VisibilityState.HIDDEN
+	if civ.visible_regions.has(region_id):
+		return Enums.VisibilityState.VISIBLE
+	if civ.explored_set.has(region_id):
+		return Enums.VisibilityState.EXPLORED
+	return Enums.VisibilityState.HIDDEN
+
+
+func get_player_visibility(region_id: int) -> Enums.VisibilityState:
+	return get_visibility(player_civ_id, region_id)
+
+
+func update_visibility(civ_id: int) -> void:
+	## Recompute visible and explored regions for a civilization.
+	## Owned regions + their neighbors are VISIBLE. All visible become permanently EXPLORED.
+	var civ := get_civilization(civ_id)
+	if not civ:
+		return
+	civ.visible_regions.clear()
+	# Owned regions are always visible
+	for region in get_regions_by_owner(civ_id):
+		civ.visible_regions[region.id] = true
+		# Adjacent regions are also visible
+		for neighbor_id in region.adjacency_list:
+			civ.visible_regions[neighbor_id] = true
+	# All visible regions become permanently explored
+	for region_id in civ.visible_regions:
+		if not civ.explored_set.has(region_id):
+			civ.explored_regions.append(region_id)
+			civ.explored_set[region_id] = true
+
+
+func update_all_visibility() -> void:
+	## Update visibility for the player civ (AI doesn't need fog in V0.1).
+	update_visibility(player_civ_id)
+
+
+func reset_visibility() -> void:
+	## Clear all visibility state. Call on game reset / "Play Again".
+	for civ in civilizations.values():
+		civ.explored_regions.clear()
+		civ.explored_set.clear()
+		civ.visible_regions.clear()

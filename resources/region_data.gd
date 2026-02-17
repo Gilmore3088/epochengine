@@ -91,6 +91,14 @@ func _init_resource_deposits() -> void:
 		resource_deposits[resource_type] = quantity
 
 
+func initialize_deposits() -> void:
+	## Re-initialize resource deposits using current terrain_type and id.
+	## Called after .tres deserialization when exported properties are set.
+	if not resource_deposits.is_empty():
+		return
+	_init_resource_deposits()
+
+
 func is_neutral() -> bool:
 	return owner_id == -1
 
