@@ -52,6 +52,9 @@ static func process_year() -> Dictionary:
 	# Step 3.7: Starvation attrition for cut-off regions
 	_step_supply_attrition(events)
 
+	# Step 3.75: Renewable resource recovery for unowned/lightly-developed regions
+	ResourceProduction.process_renewable_recovery(GameState.regions.values())
+
 	# Step 3.8: Tick war durations
 	_step_war_durations()
 

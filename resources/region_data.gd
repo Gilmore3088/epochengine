@@ -22,6 +22,7 @@ extends Resource
 @export var urbanization_level: float = 0.0  # derived from development_tier / 5.0
 @export var town_count: int = 0  # placeholder for Phase 3, 0 = no towns yet
 @export var supply_value: float = 1.0  # placeholder for Sprint G, 1.0 = full supply
+@export var renewable_degradation: float = 0.0  # 0.0 = pristine, up to MAX_DEGRADATION
 
 
 func _init(

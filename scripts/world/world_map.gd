@@ -115,6 +115,8 @@ func _ready() -> void:
 	EventBus.turn_ended.connect(_on_turn_ended)
 	EventBus.region_owner_changed.connect(_on_owner_changed)
 	EventBus.overlay_changed.connect(_on_overlay_changed)
+	# Center camera on continent after map is built
+	call_deferred("_center_camera")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -527,6 +529,14 @@ func _build_compass_rose() -> void:
 	n_label.position = center + Vector2(-4, -arm_len - 22)
 	n_label.z_index = -5
 	add_child(n_label)
+
+
+func _center_camera() -> void:
+	## Center camera on the continent after map build.
+	var camera := get_viewport().get_camera_2d()
+	if camera and camera.has_method("center_on_map"):
+		var bounds := get_map_bounds()
+		camera.center_on_map(bounds)
 
 
 func get_map_bounds() -> Rect2:

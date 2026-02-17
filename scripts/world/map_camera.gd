@@ -24,6 +24,20 @@ func _ready() -> void:
 	target_zoom = zoom.x  # Match whatever's set in the scene
 
 
+func center_on_map(bounds: Rect2) -> void:
+	## Center the camera on the map content and set appropriate zoom.
+	var center := bounds.get_center()
+	position = center
+	# Fit map into viewport with some padding
+	var viewport_size := get_viewport_rect().size
+	var scale_x := viewport_size.x / bounds.size.x
+	var scale_y := viewport_size.y / bounds.size.y
+	var fit_zoom := minf(scale_x, scale_y) * 0.85  # 85% fill
+	target_zoom = clampf(fit_zoom, ZOOM_MIN, ZOOM_MAX)
+	zoom = Vector2(target_zoom, target_zoom)
+	EventBus.zoom_changed.emit(target_zoom)
+
+
 func _process(delta: float) -> void:
 	# Keyboard panning
 	var direction := Vector2.ZERO

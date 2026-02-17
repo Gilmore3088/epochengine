@@ -95,6 +95,7 @@ func _create_save_data() -> Resource:
 			"supply_value": region.supply_value,
 			"resource_deposits": region.resource_deposits,
 			"extraction_years": region.extraction_years,
+			"renewable_degradation": region.renewable_degradation,
 		})
 	save.set_meta("regions", region_list)
 
@@ -185,6 +186,7 @@ func _restore_save_data(save: Resource) -> void:
 		region.supply_value = data.get("supply_value", 1.0)
 		region.resource_deposits = data.get("resource_deposits", {})
 		region.extraction_years = data.get("extraction_years", 0)
+		region.renewable_degradation = data.get("renewable_degradation", 0.0)
 		GameState.regions[region.id] = region
 
 	# Restore civilizations

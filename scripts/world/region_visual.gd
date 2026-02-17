@@ -322,19 +322,67 @@ func _render_terrain() -> void:
 
 
 func _render_resources() -> void:
+	var res_color := _compute_resource_overlay_color()
 	if _has_texture:
 		polygon.color = HEATMAP_BASE_DIM
+		tint_overlay.color = Color(res_color.r, res_color.g, res_color.b, Constants.TINT_ALPHA_HEATMAP)
 		tint_overlay.visible = true
-		if not region_data.resource_stock.is_empty():
-			tint_overlay.color = Color(0.72, 0.58, 0.18, Constants.TINT_ALPHA_HEATMAP)
-		else:
-			tint_overlay.color = Color(0.28, 0.26, 0.22, Constants.TINT_ALPHA_HEATMAP)
 	else:
 		tint_overlay.visible = false
-		if not region_data.resource_stock.is_empty():
-			polygon.color = Color(0.72, 0.58, 0.18)
-		else:
-			polygon.color = Color(0.28, 0.26, 0.22, 0.7)
+		polygon.color = res_color
+
+
+func _compute_resource_overlay_color() -> Color:
+	## Compute resource overlay color based on terrain yields + deposits.
+	## Richness = number of distinct resource types. Hue shifts by dominant era.
+	## Regions with active deposits are brighter/more saturated.
+	var terrain_key: int = region_data.terrain_type
+	var terrain_yields: Dictionary = Constants.RESOURCE_TERRAIN_YIELDS.get(terrain_key, {})
+	var richness: int = terrain_yields.size()
+
+	# Count active deposits
+	var active_deposits: int = 0
+	for res_type in region_data.resource_deposits:
+		if region_data.resource_deposits[res_type] > 0:
+			active_deposits += 1
+
+	if richness == 0 and active_deposits == 0:
+		return Color(0.22, 0.20, 0.18, 0.6)
+
+	# Base hue by dominant resource era
+	# Classical (era 1): warm gold, Industrial (era 2): copper/orange, Future (era 3): teal/blue
+	var era_sum := 0
+	var era_count := 0
+	for res_type in terrain_yields:
+		var unlock_era: int = Constants.RESOURCE_ERA_UNLOCK.get(res_type, 1)
+		era_sum += unlock_era
+		era_count += 1
+	for res_type in region_data.resource_deposits:
+		if region_data.resource_deposits[res_type] > 0:
+			var unlock_era: int = Constants.RESOURCE_ERA_UNLOCK.get(res_type, 1)
+			era_sum += unlock_era
+			era_count += 1
+
+	var avg_era: float = float(era_sum) / float(maxi(era_count, 1))
+
+	# Color interpolation: Classical=gold, Industrial=copper, Future=teal
+	var base_color: Color
+	if avg_era < 1.5:
+		base_color = Color(0.72, 0.62, 0.22)  # gold
+	elif avg_era < 2.5:
+		base_color = Color(0.72, 0.48, 0.22)  # copper
+	else:
+		base_color = Color(0.28, 0.58, 0.68)  # teal
+
+	# Brighten by richness (1-5 types -> 0.6 to 1.0 brightness)
+	var brightness := lerpf(0.6, 1.0, clampf(float(richness) / 5.0, 0.0, 1.0))
+	base_color = base_color * brightness
+
+	# Active deposits add extra saturation/brightness
+	if active_deposits > 0:
+		base_color = base_color.lightened(0.12 * minf(float(active_deposits), 3.0))
+
+	return base_color
 
 
 func _render_supply() -> void:

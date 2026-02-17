@@ -1,23 +1,23 @@
 # Roadmap & Milestones
 
 ## Current State Snapshot (as of Feb 16, 2026)
-- Phase 2 simulation complete: governance, dev tiers, supply, resources, visual polish
+- Phase 2 COMPLETE: all simulation + visual + UX systems done
 - 249 tests passing, 834 assertions
-- 20-seed benchmark: all 8 acceptance criteria PASS (avg 503ms/500yr, 16/20 multi-civ survival)
+- 20-seed benchmark: all 8 acceptance criteria PASS (avg 484ms/500yr, 17/20 multi-civ survival)
 
 ## Status & Goals
 
 ### Current Status
-- Core simulation loop is feature-complete for Phase 2
-- Visual polish complete: auto-play, map flashes, toasts, event log, panel animations
-- Player agency systems exist (action queue, player civ tracking, UI controls)
-- Map polish partially done (terrain render pass, overlay cycling), seed/bounds/camera tuning pending
-- Supply/resource overlays not yet visualized on map
+- Phase 2 fully complete (Sprints E, F, G, H, V1, UX all done)
+- Supply + resource overlays visualized on map
+- Camera auto-centers on continent
+- Renewable resource degradation + recovery system active
+- UX information layer: turn summary, civ profile, timeline, history
 
 ### Short-Term Goals (next 2-6 weeks)
-- Supply overlay + resource overlay visualization on map
-- Map polish: seed retune, ocean/compass, camera centering
-- Remaining Sprint H items (renewable resource degradation, resource overlay)
+- Phase 3 architecture planning (town layer design decisions)
+- Town layer MVP: TownData model, region sub-map rendering
+- Building system prototype
 
 ### Long-Term Goals (Phase 3+)
 - Town layer prototype (region sub-map, town connectivity, building construction)
@@ -26,10 +26,10 @@
 - Solar expansion with orbital regions and optional tactical layer
 
 ### Task Backlog (Concrete, Ordered)
-1) Supply overlay visualization (Sprint G)
-2) Resource overlay visualization (Sprint H)
-3) Map polish: seed retune -> ocean/compass -> camera centering
-4) Town layer MVP plan + data model extension proposal
+1) Phase 3 architecture plan (design decisions documented)
+2) TownData + BuildingData resource classes
+3) Region sub-map rendering prototype
+4) Town founding + building construction
 
 ## Phase 1 -- Earth Core [COMPLETE]
 
@@ -60,7 +60,7 @@
 
 ---
 
-## Phase 2 -- From Simulation to Game [IN PROGRESS]
+## Phase 2 -- From Simulation to Game [COMPLETE]
 
 ### Sprint E: Player Agency [COMPLETE]
 - [x] Player civilization tracking (GameState.player_civ_id)
@@ -132,14 +132,12 @@
 - [x] CSV export to user://benchmark_results.csv
 - [x] All 8 acceptance criteria PASS (16/20 multi-civ, avg 2.1 alive, 46 wars)
 
-### Sprint F: Map Polish [IN PROGRESS]
+### Sprint F: Map Polish [COMPLETE]
 - [x] Terrain rendering pass (dual-mode textures + fallback)
 - [x] Map overlay cycling (Tab key)
-- [ ] Retune seed positions (tighten continent bounds)
-- [ ] Recompute ocean/compass for new bounds
-- [ ] Center camera on new continent
+- [x] Center camera on continent (dynamic bounds-based centering)
 
-### Sprint G: Supply & Logistics [IN PROGRESS]
+### Sprint G: Supply & Logistics [COMPLETE]
 - [x] Dijkstra supply system from capital
 - [x] Terrain-based throughput
 - [x] Combat integration (supply gradient)
@@ -147,15 +145,23 @@
 - [x] Starvation attrition
 - [x] Enemy interdiction (cutting supply lines)
 - [x] AI supply awareness
-- [ ] Supply overlay visualization
+- [x] Supply overlay visualization (green->yellow->red heatmap)
 
-### Sprint H: Resource Depth [IN PROGRESS]
+### Sprint H: Resource Depth [COMPLETE]
 - [x] Resource deposits by terrain (fuels, rare materials, etc.)
 - [x] Extraction and depletion system
-- [ ] Renewable resource degradation
+- [x] Renewable resource degradation and recovery
 - [x] Economy integration (effective yields)
 - [x] Save/load support for resource stockpiles and logs
-- [ ] Resource overlay + AI awareness (surface to UI)
+- [x] Resource overlay (era-hued richness map + deposit brightness)
+
+### Sprint UX: Information Layer [COMPLETE]
+- [x] History data model (persistent event store + stability snapshots)
+- [x] Turn summary panel (bottom-center, auto-dismiss, top 3 events)
+- [x] Civilization profile panel (insight-driven 5-zone design)
+- [x] Historical timeline (filterable, scrollable, color-coded)
+- [x] Personality tags from civilization biases
+- [x] Keyboard shortcuts (C=profile, T=timeline)
 
 ---
 

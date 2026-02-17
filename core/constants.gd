@@ -353,3 +353,9 @@ const TERRAIN_TINT_ALPHA_OVERRIDE := {
 
 # --- Per-Region Variation ---
 const VARIATION_BRIGHTNESS_RANGE := 0.03  # +/- 3% brightness per region
+
+# --- Renewable Resource Degradation ---
+const RENEWABLE_DEGRADATION_RATE := 0.02   # +2% degradation per year under extraction
+const RENEWABLE_RECOVERY_RATE := 0.01      # -1% recovery per year when unowned/light extraction
+const RENEWABLE_MAX_DEGRADATION := 0.40    # cap at 40% yield reduction
+const RENEWABLE_RECOVERY_THRESHOLD := 2    # infra level at or below triggers recovery

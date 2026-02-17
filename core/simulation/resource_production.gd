@@ -60,6 +60,7 @@ static func calculate_resource_yields(
 	civ: CivilizationData, owned_regions: Array[RegionData]
 ) -> Dictionary:
 	## Calculate renewable per-turn yields from terrain for all unlocked resources.
+	## Applies renewable degradation to each region's yields.
 	## Returns {resource_type_int: total_yield}.
 	var totals: Dictionary = {}
 	var era: int = civ.current_era
@@ -75,6 +76,7 @@ static func calculate_resource_yields(
 			region.development_tier
 		)
 		var infra_bonus: int = region.infrastructure_level / 2  # +1 per 2 levels
+		var degradation_mult: float = 1.0 - region.renewable_degradation
 
 		for res_type in terrain_yields:
 			# Era gate: skip resources not yet unlocked
@@ -82,8 +84,15 @@ static func calculate_resource_yields(
 				continue
 
 			var base_yield: int = terrain_yields[res_type]
-			var adjusted := int(float(base_yield + infra_bonus) * size_mod * tier_mult)
+			var adjusted := int(float(base_yield + infra_bonus) * size_mod * tier_mult * degradation_mult)
 			totals[res_type] = totals.get(res_type, 0) + adjusted
+
+		# Increase degradation from extraction pressure
+		if not terrain_yields.is_empty():
+			region.renewable_degradation = minf(
+				region.renewable_degradation + Constants.RENEWABLE_DEGRADATION_RATE,
+				Constants.RENEWABLE_MAX_DEGRADATION,
+			)
 
 	return totals
 
@@ -192,6 +201,19 @@ static func calculate_complexity_tax(civ: CivilizationData) -> float:
 	# Governance tier mitigates (TRIBAL=0 gives no reduction)
 	var gov_reduction := float(civ.governance_tier) * Constants.COMPLEXITY_TAX_GOVERNANCE_REDUCTION
 	return maxf(raw_penalty - gov_reduction, 0.0)
+
+
+static func process_renewable_recovery(all_regions: Array) -> void:
+	## Gradually recover degradation for unowned or lightly-developed regions.
+	## Called once per turn for all regions.
+	for region in all_regions:
+		if region.renewable_degradation <= 0.0:
+			continue
+		# Recover if unowned or low infrastructure
+		if region.owner_id < 0 or region.infrastructure_level <= Constants.RENEWABLE_RECOVERY_THRESHOLD:
+			region.renewable_degradation = maxf(
+				region.renewable_degradation - Constants.RENEWABLE_RECOVERY_RATE, 0.0
+			)
 
 
 static func get_resource_name(res_type: int) -> String:
