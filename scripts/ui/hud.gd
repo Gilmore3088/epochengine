@@ -81,6 +81,7 @@ func _build_ui() -> void:
 	_build_event_log()
 	_build_toast_container()
 	_build_summary_modal()
+	_build_info_panels()
 
 
 # ==================== TOP BAR ====================
@@ -250,6 +251,25 @@ func _build_top_bar() -> void:
 	zoom_in_btn.pressed.connect(func() -> void: _zoom_camera(0.1))
 	UITheme.style_button(zoom_in_btn)
 	zoom_group.add_child(zoom_in_btn)
+
+	_add_separator(top_bar)
+
+	# --- Info panel buttons ---
+	var info_group := HBoxContainer.new()
+	info_group.add_theme_constant_override("separation", 4)
+	top_bar.add_child(info_group)
+
+	var profile_btn := Button.new()
+	profile_btn.text = "Profile(C)"
+	profile_btn.pressed.connect(func() -> void: EventBus.open_civ_profile.emit(player_civ_id))
+	UITheme.style_button(profile_btn)
+	info_group.add_child(profile_btn)
+
+	var timeline_btn := Button.new()
+	timeline_btn.text = "Timeline(T)"
+	timeline_btn.pressed.connect(func() -> void: EventBus.open_timeline.emit())
+	UITheme.style_button(timeline_btn)
+	info_group.add_child(timeline_btn)
 
 
 func _add_separator(parent: Control) -> void:
@@ -752,6 +772,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			_start_fast_forward(10)
 	elif event.is_action_pressed("cycle_overlay"):
 		_cycle_overlay()
+	elif event.is_action_pressed("open_civ_profile"):
+		EventBus.open_civ_profile.emit(player_civ_id)
+	elif event.is_action_pressed("open_timeline"):
+		EventBus.open_timeline.emit()
 	if event is InputEventKey and event.pressed and summary_bg.visible:
 		if event.keycode == KEY_ESCAPE or event.keycode == KEY_ENTER:
 			_dismiss_summary()
@@ -1045,3 +1069,16 @@ func _on_maintenance_failure(civ_id: int, resource_name: String, missing_inputs:
 		_log("[color=#da5]Maintenance failure: %s (missing %d input%s)[/color]" % [
 			resource_name, missing_inputs, "s" if missing_inputs > 1 else ""
 		])
+
+
+# ==================== INFO PANELS ====================
+
+func _build_info_panels() -> void:
+	var turn_summary := TurnSummaryPanel.new()
+	add_child(turn_summary)
+
+	var civ_profile := CivProfilePanel.new()
+	add_child(civ_profile)
+
+	var timeline := TimelinePanel.new()
+	add_child(timeline)

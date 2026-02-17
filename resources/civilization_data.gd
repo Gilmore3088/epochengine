@@ -87,6 +87,28 @@ func can_spawn_hero() -> bool:
 	return hero_count() < Constants.HERO_MAX_PER_CIV
 
 
+func get_personality_tags() -> Array[String]:
+	## Returns human-readable personality tags based on AI biases.
+	var tags: Array[String] = []
+	if expansion_bias >= 0.6:
+		tags.append("Expansionist")
+	elif expansion_bias <= 0.3:
+		tags.append("Insular")
+	if aggression_bias >= 0.6:
+		tags.append("Warlike")
+	elif aggression_bias <= 0.3:
+		tags.append("Pacifist")
+	if diplomacy_bias >= 0.6:
+		tags.append("Diplomatic")
+	elif diplomacy_bias <= 0.3:
+		tags.append("Isolationist")
+	if economy_bias >= 0.6:
+		tags.append("Mercantile")
+	elif economy_bias <= 0.3:
+		tags.append("Austere")
+	return tags
+
+
 func get_state() -> Enums.CivState:
 	if is_collapsed:
 		return Enums.CivState.COLLAPSED

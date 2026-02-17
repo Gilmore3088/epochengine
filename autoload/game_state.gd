@@ -37,6 +37,7 @@ func set_sim_seed(seed_value: int) -> void:
 
 
 func load_game_data() -> void:
+	History.clear()
 	_load_regions()
 	_load_civilizations()
 	_recalculate_civ_populations()
