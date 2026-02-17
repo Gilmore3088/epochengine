@@ -183,8 +183,8 @@ func _rebuild_save_list() -> void:
 func _on_load_slot(slot_name: String) -> void:
 	var success := SaveManager.load_game(slot_name)
 	if success:
-		close_menu()
-		EventBus.turn_ended.emit(GameState.current_year)
+		get_tree().paused = false
+		get_tree().call_deferred("reload_current_scene")
 	else:
 		_feedback_label.text = "Load failed."
 
