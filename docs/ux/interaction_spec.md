@@ -1,60 +1,69 @@
-# UX & Interaction Specification
+# UX & Interaction Specification (Aligned to PRD)
 
-## Core Screens
+## Core Screens / Panels
 
-| Screen | Purpose |
-|--------|---------|
-| Main Map View | Primary gameplay -- colored regions, civilization borders |
-| Region Detail Panel | Click a region to see population, terrain, owner, yields |
-| Diplomacy Screen | View and manage alliances, declare war |
-| War Overview | Active fronts, military strength comparison |
-| Timeline Log | Scrollable history of events per year |
-| Fast-Forward Summary Modal | Recap of important events during fast-forward |
+| Screen / Panel | Purpose |
+|---------------|---------|
+| Main Map View | Primary gameplay — regions, borders, overlays |
+| Region Detail Panel | Click a region to view terrain, owner, yields, towns, actions |
+| Town Detail Panel | (In progress) Town stats, buildings, workforce presets |
+| Turn Summary Panel | End-of-turn recap (top events + deltas) |
+| Civ Profile Panel | Deep dive on civ drivers and trends |
+| Timeline Panel | Scrollable event history with filters |
+| Victory Panel | Endgame summary (victory/defeat) |
 
 ## Core HUD Elements
 
-Persistent on-screen during gameplay:
-
-- **Year Counter** -- Current simulated year
-- **Stability Meter** -- Player civilization's stability (0-100 bar)
-- **Resource Panel** -- Food stockpile, production stockpile, military strength
-- **Military Strength Display** -- Army size and morale indicator
-- **Fast Forward Controls** -- Play/pause, 5x, 10x speed buttons
-- **Map Overlay Toggle** -- Switch between terrain/resource/supply/alliance views
+Persistent during gameplay:
+- **Year Counter**
+- **Stability Meter** (bar + label)
+- **Food / Production / Military** stats
+- **Era Badge + Governance Tier**
+- **Next Year / Auto-Play** controls
+- **Overlay Buttons** (Political, Terrain, Resources, Supply, Fronts)
+- **Event Log** (left-bottom)
 
 ## Map Overlays
 
 | Overlay | Shows |
 |---------|-------|
-| Terrain | Terrain type coloring (green plains, brown mountains, etc.) |
-| Resources | Resource deposits and depletion status |
-| Supply Lines | Connection paths from capitals |
-| Alliances | Color-coded alliance groupings |
+| Political | Civ ownership tint |
+| Terrain | Terrain type coloring |
+| Resources | Deposit richness + terrain yield signal |
+| Supply | Supply efficiency heatmap |
+| Fronts | War front / alliance view |
 
-## Player Actions (V0.1)
+## Player Actions (Current)
 
-- **Declare War** -- Select enemy civilization from diplomacy screen
-- **Offer Alliance** -- Propose alliance to neighboring civilization
-- **Adjust Military Investment** -- Slider to allocate production to military
-- **Advance Year** -- Process one simulation year
-- **Toggle Fast Forward** -- 5x or 10x speed, pauses on important events
+- **Advance Year**
+- **Auto-Play (P)**
+- **Upgrade Infrastructure** (owned region)
+- **Declare War / Seek Peace / Alliance** (via region panel or context menu)
+- **Found Town** (owned region, if eligible)
+- **Construct Building** (via town actions in region panel)
 
-## Fast-Forward Behavior
+## Fast-Forward / Auto-Play
 
-- Runs multiple yearly ticks automatically
-- **Auto-pauses on:**
-  - War declaration (by any civilization)
-  - Hero emergence or death
-  - Golden age start or end
-  - Civilization collapse
-  - Technology emergence
-- Summary modal shows all events that occurred during fast-forward period
+- Auto-play advances years on a timer (P to toggle)
+- Speed shortcuts: 1/2/3
+- Auto-pauses on player-impact events (war, collapse, hero spawn)
+- Summary modal shows fast-forward event recap
 
 ## Input Controls
 
-- **Left Click** -- Select region
-- **Right Click** -- Context menu (declare war, offer alliance)
-- **Scroll Wheel** -- Zoom map
-- **WASD / Arrow Keys** -- Pan map
-- **Space** -- Advance year
-- **1/2/3** -- Normal / 5x / 10x speed
+- **Left Click** — Select region
+- **Right Click** — Context menu
+- **Scroll Wheel** — Zoom
+- **WASD / Arrow Keys** — Pan
+- **Space** — Advance year
+- **1/2/3** — Speed presets
+- **P** — Toggle auto-play
+- **C** — Civ profile
+- **T** — Timeline
+- **Tab** — Cycle overlays
+
+## UX Priorities (Phase 3)
+
+- Expand town UI to create meaningful per-turn decisions
+- Add “almost there” indicators (tier gates, infra gaps, stability thresholds)
+- Improve player feedback on action outcomes

@@ -1,4 +1,4 @@
-# Core Data Schema
+# Core Data Schema (Aligned)
 
 ## Region
 
@@ -7,15 +7,25 @@ class_name RegionData
 extends Resource
 
 @export var id: int
-@export var terrain_type: String          # "river_basin", "plains", "mountains", etc.
+@export var region_name: String
+@export var terrain_type: Enums.TerrainType
 @export var population: int
 @export var owner_id: int                 # -1 = neutral
 @export var food_yield: int
 @export var production_yield: int
-@export var defense_modifier: float       # 0.7 - 1.4
-@export var resource_stock: Dictionary    # {"coal": 100, "oil": 50}
-@export var adjacency_list: Array[int]    # neighboring region IDs
+@export var defense_modifier: float
+@export var resource_stock: Dictionary    # legacy placeholder
+@export var resource_deposits: Dictionary # {resource_type_int: remaining_quantity}
+@export var extraction_years: int
+@export var adjacency_list: Array[int]
 @export var infrastructure_level: int     # 0-5
+@export var size_factor: float
+@export var development_tier: int
+@export var demotion_years: int
+@export var urbanization_level: float
+@export var town_count: int
+@export var supply_value: float           # 0.0 - 1.0
+@export var towns: Array                  # Array[TownData]
 ```
 
 ## Civilization
@@ -25,7 +35,7 @@ class_name CivilizationData
 extends Resource
 
 @export var id: int
-@export var name: String
+@export var civ_name: String
 @export var color: Color
 @export var stability: float              # 0-100
 @export var total_population: int
@@ -33,22 +43,41 @@ extends Resource
 @export var production_stockpile: int
 @export var military_strength: float
 @export var capital_region_id: int
-@export var hero_list: Array[int]         # hero IDs
-@export var is_at_war: bool
+@export var hero_ids: Array[int]
+@export var is_collapsed: bool
+@export var is_player: bool
+@export var governance_tier: Enums.GovernanceTier
+@export var governance_years: int
+@export var current_era: Enums.Epoch
+
+# Golden age
 @export var golden_age_years_remaining: int
 @export var golden_age_cooldown: int
 
 # Hidden tech metrics
-@export var knowledge: float              # 0-100
-@export var energy: float                 # 0-100
-@export var social_coordination: float    # 0-100
-@export var economic_surplus: float       # 0-100
-@export var military_pressure: float      # 0-100
+@export var knowledge: float
+@export var energy: float
+@export var social_coordination: float
+@export var economic_surplus: float
+@export var military_pressure: float
 
 # AI personality
-@export var expansion_bias: float         # 0.0-1.0
-@export var aggression_bias: float        # 0.0-1.0
-@export var diplomacy_bias: float         # 0.0-1.0
+@export var expansion_bias: float
+@export var aggression_bias: float
+@export var diplomacy_bias: float
+@export var economy_bias: float
+
+# War & diplomacy
+@export var war_targets: Array[int]
+@export var war_durations: Dictionary     # {civ_id: years_at_war}
+@export var peace_cooldowns: Dictionary   # {civ_id: years_remaining}
+@export var alliance_partners: Array[int]
+@export var consecutive_low_stability_years: int
+
+# Tech + resources
+@export var technologies: Array[String]
+@export var resource_stockpiles: Dictionary
+@export var resource_production_log: Dictionary
 ```
 
 ## Hero
@@ -58,27 +87,28 @@ class_name HeroData
 extends Resource
 
 @export var id: int
-@export var type: String                  # "general", "reformer", "visionary"
+@export var hero_name: String
+@export var type: Enums.HeroType
 @export var age: int
-@export var lifespan: int                 # randomized 40-80
-@export var modifier_type: String         # "military", "stability", "production"
-@export var modifier_value: float         # e.g., 0.10 for +10%
+@export var lifespan: int
 @export var owner_civ_id: int
+@export var birth_year: int
 ```
 
-## Army (Future Phase)
+## Town
 
 ```gdscript
-class_name ArmyData
+class_name TownData
 extends Resource
 
-@export var manpower: int
-@export var morale: float                 # 0.5-1.2
-@export var supply_status: float          # 0.5-1.0
-@export var doctrine: float               # 0.8-1.2
-@export var equipment_quality: float      # 0.5-1.5
-@export var owner_civ_id: int
-@export var current_region_id: int
+@export var id: int
+@export var town_name: String
+@export var region_id: int
+@export var population: int
+@export var buildings: Array[Dictionary]  # [{type: BuildingType, count: int}]
+@export var infrastructure_level: int
+@export var founded_year: int
+@export var workforce_preset: int
 ```
 
 ## Entity Relationship Diagram
@@ -87,10 +117,10 @@ extends Resource
 erDiagram
     Civilization ||--o{ Region : owns
     Civilization ||--o{ Hero : has
+    Region ||--o{ Town : contains
     Civilization {
         int id
-        string name
-        color color
+        string civ_name
         float stability
         int total_population
         int food_stockpile
@@ -100,23 +130,31 @@ erDiagram
     }
     Region {
         int id
-        string terrain_type
+        string region_name
+        int terrain_type
         int population
         int owner_id
         int food_yield
         int production_yield
         float defense_modifier
-        dict resource_stock
+        dict resource_deposits
         array adjacency_list
         int infrastructure_level
+        float supply_value
+    }
+    Town {
+        int id
+        string town_name
+        int region_id
+        int population
+        array buildings
     }
     Hero {
         int id
-        string type
+        string hero_name
+        int type
         int age
         int lifespan
-        string modifier_type
-        float modifier_value
     }
     Region ||--o{ Region : adjacent_to
 ```

@@ -1,73 +1,124 @@
-# Product Requirements Document
+# Product Requirements Document (PRD)
 
-## 1. Product Overview
+## 1. Overview
 
-**Working Title:** Epoch Engine
-**Platform:** macOS (Godot 4, 2D)
-**Mode:** Single-player
-**Core Philosophy:** Strongly emergent, map-driven civilization simulation spanning millennia.
+### Summary
+Epoch Engine is a map-driven civilization evolution simulator where geography, logistics, and systemic pressure shape history from prehistoric tribes to interplanetary empires.
 
-## 2. Core Design Pillars
+### Vision
+A strongly emergent geopolitical simulation where terrain, logistics, heroes, and systemic friction create divergent outcomes across civilizations.
 
-1. Geography shapes destiny
-2. Logistics determines victory
-3. Technology emerges from systemic pressure
-4. Heroes catalyze historical inflection points
-5. Strong emergence over scripted outcomes
+### Design Principles
+1. No hard genre switches
+2. Systems expand, not reset
+3. Emergent identity over scripted arcs
+4. Scaling introduces friction, not inevitability
 
-## 3. Objectives
+### Core Pillars
+- Geography shapes destiny
+- Logistics determines victory
+- Tech emerges from pressure
+- Heroes catalyze history
+- Strong emergence
 
-- Build playable V0.1 in 6 months
-- Region-based Earth simulation
-- 1 year per turn with 5x/10x fast-forward
+---
 
-## 4. V0.1 Scope (Locked)
+## 2. Features by Phase
 
-### Included
+### Phase 1 — Earth Core (Complete)
+- Yearly turn pipeline
+- Population growth, stability, war
+- Save/load
 
-- 100-120 handcrafted region map
-- 3 civilizations
-- 1 year per turn
-- 5x / 10x fast-forward
-- Auto-resolve warfare
-- Hero system (3 types: General, Reformer, Visionary)
-- Golden age mechanic
-- Food, Production, Stability, Military systems
+### Phase 2 — Simulation to Game (Mostly Complete)
+- Supply system (Dijkstra routing, terrain throughput, interdiction, attrition)
+- Resource pyramid (deposits, extraction, maintenance, complexity)
+- Governance + development tiers
+- UX information layer (turn summary, civ profile, timeline)
 
-### Explicitly Excluded
+### Phase 3 — Town Layer (Next Major Step)
+- Town UI + per-town decisions
+- Building construction
+- Workforce allocation (presets)
+- “Almost there” indicators
+- Region totals derived from towns
 
-- Tactical battle layer
-- Climate collapse
-- Space layer
-- Alien civilizations
-- Advanced ideology branches
-- Multiplayer
-- Procedural map generation
+### Phase 4 — Climate & Industrial Pressure (Future)
+- Migration & environmental stress
+- Industrial tradeoffs
+- Ideology/cultural drift
 
-## 5. Simulation Architecture
+### Phase 5 — Solar Expansion (Future)
+- Planetary colonies
+- Star systems
+- Galactic governance
 
-### Turn Order (Strict)
+---
 
-1. Population Growth
-2. Resource Production
-3. Resource Consumption
-4. Stability Recalculation
-5. AI Decisions (Expansion, Diplomacy, War)
-6. War Resolution
-7. Hero Aging & Effects
-8. Golden Age Evaluation
-9. Event Processing (Tech Emergence)
-10. End-of-Year Logging
+## 3. Systems (Aligned)
 
-## 6. Performance Requirements
+### Supply
+- Dijkstra routing from capital
+- Terrain throughput + interdiction
+- Supply affects economy and stability
 
-- 10-year fast-forward < 2 seconds
-- 500-year stability test without crash
-- Save file < 5MB
+### Resources
+- Deposits + extraction
+- Maintenance penalties
+- Complexity tax
 
-## 7. Definition of Done (Phase 1)
+### Governance & Development
+- Tier gates by infra/pop/stability/era
+- Hysteresis for demotion
+- Admin capacity bonuses
 
-- 500-year stable simulation
-- At least one collapse event across 10 runs
-- At least one golden age observed across 10 runs
-- Save/load round-trip preserves state
+### Towns (Planned)
+- Town UI and building system
+- Workforce allocation
+- Urban gravity
+
+---
+
+## 4. UX (Aligned)
+
+### Information Layer
+- Turn summary panel
+- Civilization profile panel
+- Timeline log
+
+### Decision Surface
+- Currently thin
+- Town UI becomes the primary choice layer
+
+---
+
+## 5. Roadmap
+
+### Next Sprint (Phase 3A)
+- Town UI + building construction
+- Workforce presets
+- “Almost there” indicators
+
+### Phase 3B
+- Victory conditions + defeat flow
+- Empire report summary
+
+### Later
+- Trait/ideology engine
+- Climate systems
+- Planetary expansion
+
+---
+
+## Document Index
+
+Canonical source of truth: **docs/PRD.md**
+
+Supporting (aligned to PRD):
+- docs/ROADMAP.md
+- docs/architecture/technical_architecture.md
+- docs/ux/interaction_spec.md
+- docs/systems/*
+
+Legacy (archived for historical context):
+- docs/legacy/MULTI_LAYER_GAMEPLAY.md
