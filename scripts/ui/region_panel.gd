@@ -61,6 +61,7 @@ var scale_up_btn: Button
 # Drag state
 var _dragging: bool = false
 var _drag_offset: Vector2 = Vector2.ZERO
+var _home_x: float = 0.0
 
 # Scale
 var ui_scale: float = 1.0
@@ -85,6 +86,7 @@ func _ready() -> void:
 func _set_initial_position() -> void:
 	var vp_size := get_viewport_rect().size
 	position = Vector2(vp_size.x - size.x - EDGE_PAD, (vp_size.y - size.y) / 2.0)
+	_home_x = position.x
 
 
 func _build_ui() -> void:
@@ -360,6 +362,8 @@ func _snap_to_edge() -> void:
 		position.y = EDGE_PAD
 	elif dist_bottom < SNAP_MARGIN:
 		position.y = vp_size.y - panel_size.y - EDGE_PAD
+
+	_home_x = position.x
 
 
 # ==================== FONT SCALING ====================
@@ -732,16 +736,15 @@ func _close() -> void:
 
 
 func _slide_in() -> void:
-	var target_x := position.x
-	# Only animate from offscreen if not already visible
 	if not visible:
 		position.x = get_viewport_rect().size.x
 	visible = true
 	var tween := create_tween()
-	tween.tween_property(self, "position:x", target_x, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_property(self, "position:x", _home_x, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
 
 
 func _slide_out() -> void:
+	_home_x = position.x
 	var tween := create_tween()
 	tween.tween_property(self, "position:x", get_viewport_rect().size.x, 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
 	tween.tween_callback(func():
