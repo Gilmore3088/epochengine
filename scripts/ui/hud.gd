@@ -45,6 +45,15 @@ var fast_forward_target: int = 0
 var is_fast_forwarding: bool = false
 var ff_should_pause: bool = false
 
+# Auto-play state
+var is_auto_playing: bool = false
+var auto_play_interval: float = 0.8
+var play_btn: Button
+var playing_label: Label
+
+# Toast notification elements
+var toast_container: VBoxContainer
+
 # Pre-fast-forward state snapshot
 var ff_pre_state: Dictionary = {}
 
@@ -56,6 +65,13 @@ func _ready() -> void:
 	_build_ui()
 	_connect_signals()
 	_update_display()
+	# Auto-play timer
+	var timer := Timer.new()
+	timer.name = "AutoPlayTimer"
+	timer.wait_time = auto_play_interval
+	timer.one_shot = false
+	timer.timeout.connect(_on_auto_play_timeout)
+	add_child(timer)
 
 
 func _build_ui() -> void:
@@ -63,6 +79,7 @@ func _build_ui() -> void:
 	_build_resource_bar()
 	_build_overlay_strip()
 	_build_event_log()
+	_build_toast_container()
 	_build_summary_modal()
 
 
@@ -96,7 +113,7 @@ func _build_top_bar() -> void:
 
 	year_label = Label.new()
 	year_label.text = "Year 0"
-	UITheme.style_label_header(year_label, 22)
+	UITheme.style_label_header(year_label, 28)
 	state_group.add_child(year_label)
 
 	var stability_box := VBoxContainer.new()
@@ -112,7 +129,7 @@ func _build_top_bar() -> void:
 	stability_bar.min_value = 0
 	stability_bar.max_value = 100
 	stability_bar.value = 50
-	stability_bar.custom_minimum_size = Vector2(100, 10)
+	stability_bar.custom_minimum_size = Vector2(160, 12)
 	stability_bar.show_percentage = false
 	var bar_bg := StyleBoxFlat.new()
 	bar_bg.bg_color = Color(0.12, 0.10, 0.08, 0.6)
@@ -180,6 +197,12 @@ func _build_top_bar() -> void:
 	UITheme.style_button(advance_button)
 	time_group.add_child(advance_button)
 
+	play_btn = Button.new()
+	play_btn.text = "Play"
+	play_btn.pressed.connect(_toggle_auto_play)
+	UITheme.style_button(play_btn)
+	time_group.add_child(play_btn)
+
 	speed_5x_button = Button.new()
 	speed_5x_button.text = "+5"
 	speed_5x_button.pressed.connect(func() -> void: _start_fast_forward(5))
@@ -196,6 +219,11 @@ func _build_top_bar() -> void:
 	speed_label.text = ""
 	UITheme.style_label_body(speed_label, 13, UITheme.PARCHMENT_DIM)
 	time_group.add_child(speed_label)
+
+	playing_label = Label.new()
+	playing_label.text = ""
+	UITheme.style_label_stat(playing_label, 13, UITheme.COLOR_FOOD)
+	time_group.add_child(playing_label)
 
 	_add_separator(top_bar)
 
@@ -412,6 +440,56 @@ func _build_event_log() -> void:
 	add_child(log_title)
 
 
+# ==================== TOAST NOTIFICATIONS ====================
+
+func _build_toast_container() -> void:
+	toast_container = VBoxContainer.new()
+	toast_container.set_anchors_preset(Control.PRESET_CENTER_TOP)
+	toast_container.offset_top = 58
+	toast_container.offset_left = -180
+	toast_container.offset_right = 180
+	toast_container.add_theme_constant_override("separation", 4)
+	toast_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(toast_container)
+
+
+func _show_toast(text: String, color: Color) -> void:
+	while toast_container.get_child_count() >= 3:
+		var oldest := toast_container.get_child(0)
+		toast_container.remove_child(oldest)
+		oldest.queue_free()
+
+	var panel := PanelContainer.new()
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.06, 0.05, 0.08, 0.92)
+	style.border_color = color
+	style.set_border_width_all(1)
+	style.border_width_left = 3
+	style.set_corner_radius_all(4)
+	style.set_content_margin_all(8)
+	panel.add_theme_stylebox_override("panel", style)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UITheme.style_label_body(lbl, 13, color)
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(lbl)
+
+	toast_container.add_child(panel)
+
+	# Slide in from top then fade out
+	panel.modulate.a = 0.0
+	panel.position.y = -20
+	var tween := create_tween()
+	tween.tween_property(panel, "modulate:a", 1.0, 0.2)
+	tween.parallel().tween_property(panel, "position:y", 0.0, 0.2).set_ease(Tween.EASE_OUT)
+	tween.tween_interval(2.5)
+	tween.tween_property(panel, "modulate:a", 0.0, 0.4)
+	tween.tween_callback(panel.queue_free)
+
+
 # ==================== SUMMARY MODAL ====================
 
 func _build_summary_modal() -> void:
@@ -606,16 +684,30 @@ func _update_display() -> void:
 		return
 
 	year_label.text = "Year %d" % GameState.current_year
-	stability_label.text = "Stability: %.0f" % civ.stability
-	stability_bar.value = civ.stability
+	stability_label.text = "Stability: %.0f%%" % civ.stability
+	# Smooth stability bar animation
+	var bar_tween := create_tween()
+	bar_tween.tween_property(stability_bar, "value", civ.stability, 0.3)
 	_update_stability_color(civ.stability)
 	food_label.text = "Food: %d" % civ.food_stockpile
 	production_label.text = "Prod: %d" % civ.production_stockpile
 	military_label.text = "Army: %.0f" % civ.military_strength
 
-	# Era and governance
+	# Era and governance with badge styling
 	var era_names := ["Prehistoric", "Classical", "Industrial", "Future"]
-	era_label.text = era_names[clampi(civ.current_era, 0, 3)]
+	var era_colors := [
+		Color(0.4, 0.35, 0.25, 0.7),
+		Color(0.35, 0.30, 0.55, 0.7),
+		Color(0.30, 0.45, 0.30, 0.7),
+		Color(0.25, 0.38, 0.55, 0.7),
+	]
+	var era_idx := clampi(civ.current_era, 0, 3)
+	era_label.text = " %s " % era_names[era_idx]
+	var era_style := StyleBoxFlat.new()
+	era_style.bg_color = era_colors[era_idx]
+	era_style.set_corner_radius_all(3)
+	era_style.set_content_margin_all(3)
+	era_label.add_theme_stylebox_override("normal", era_style)
 	governance_label.text = GovernanceSimulation.get_tier_name(civ.governance_tier)
 	regions_label.text = "%d regions" % GameState.get_regions_by_owner(civ.id).size()
 
@@ -636,14 +728,28 @@ func _update_stability_color(value: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("advance_year"):
-		_on_advance_pressed()
+	if event.is_action_pressed("toggle_autoplay"):
+		_toggle_auto_play()
+	elif event.is_action_pressed("advance_year"):
+		if is_auto_playing:
+			_pause_auto_play()
+		else:
+			_on_advance_pressed()
 	elif event.is_action_pressed("speed_normal"):
-		_on_advance_pressed()
+		if is_auto_playing:
+			_set_auto_play_speed(1.2)
+		else:
+			_on_advance_pressed()
 	elif event.is_action_pressed("speed_fast"):
-		_start_fast_forward(5)
+		if is_auto_playing:
+			_set_auto_play_speed(0.8)
+		else:
+			_start_fast_forward(5)
 	elif event.is_action_pressed("speed_fastest"):
-		_start_fast_forward(10)
+		if is_auto_playing:
+			_set_auto_play_speed(0.3)
+		else:
+			_start_fast_forward(10)
 	elif event.is_action_pressed("cycle_overlay"):
 		_cycle_overlay()
 	if event is InputEventKey and event.pressed and summary_bg.visible:
@@ -664,6 +770,66 @@ func _on_advance_pressed() -> void:
 	if TurnManager.is_processing or summary_bg.visible:
 		return
 	TurnManager.advance_year()
+
+
+# ==================== AUTO-PLAY ====================
+
+func _toggle_auto_play() -> void:
+	if is_auto_playing:
+		_pause_auto_play()
+	else:
+		_start_auto_play()
+
+
+func _start_auto_play() -> void:
+	if summary_bg.visible or is_fast_forwarding:
+		return
+	is_auto_playing = true
+	play_btn.text = "Pause"
+	playing_label.text = "PLAYING"
+	var timer: Timer = get_node("AutoPlayTimer")
+	timer.wait_time = auto_play_interval
+	timer.start()
+	_pulse_playing_label()
+
+
+func _pause_auto_play() -> void:
+	is_auto_playing = false
+	play_btn.text = "Play"
+	playing_label.text = ""
+	var timer: Timer = get_node("AutoPlayTimer")
+	timer.stop()
+
+
+func _on_auto_play_timeout() -> void:
+	if TurnManager.is_processing or summary_bg.visible:
+		return
+	TurnManager.advance_year()
+
+
+func _set_auto_play_speed(interval: float) -> void:
+	auto_play_interval = interval
+	if is_auto_playing:
+		var timer: Timer = get_node("AutoPlayTimer")
+		timer.wait_time = interval
+		timer.start()
+	var dots := ""
+	if interval >= 1.0:
+		dots = ">"
+	elif interval >= 0.5:
+		dots = ">>"
+	else:
+		dots = ">>>"
+	speed_label.text = dots
+
+
+func _pulse_playing_label() -> void:
+	if not is_auto_playing:
+		return
+	var tween := create_tween()
+	tween.tween_property(playing_label, "modulate:a", 0.3, 0.6)
+	tween.tween_property(playing_label, "modulate:a", 1.0, 0.6)
+	tween.tween_callback(_pulse_playing_label)
 
 
 # ==================== FAST FORWARD ====================
@@ -717,7 +883,7 @@ func _on_stability_changed(civ_id: int, _old: float, _new: float) -> void:
 
 
 func _log(text: String) -> void:
-	event_log.append_text("[color=#666]Y%d[/color] %s\n" % [GameState.current_year, text])
+	event_log.append_text("[b][color=#888]Y%d[/color][/b] %s\n" % [GameState.current_year, text])
 
 
 func _on_war_declared(attacker_id: int, defender_id: int) -> void:
@@ -728,7 +894,11 @@ func _on_war_declared(attacker_id: int, defender_id: int) -> void:
 	var a := GameState.get_civilization(attacker_id)
 	var d := GameState.get_civilization(defender_id)
 	if a and d:
-		_log("[color=#e55]%s declares war on %s[/color]" % [a.civ_name, d.civ_name])
+		_log("[color=#e55][WAR] %s declares war on %s[/color]" % [a.civ_name, d.civ_name])
+		if is_auto_playing:
+			_show_toast("%s declares war on %s" % [a.civ_name, d.civ_name], Color(0.9, 0.3, 0.3))
+			if attacker_id == player_civ_id or defender_id == player_civ_id:
+				_pause_auto_play()
 
 
 func _on_hero_spawned(hero_id: int, civ_id: int, _type: Enums.HeroType) -> void:
@@ -739,9 +909,13 @@ func _on_hero_spawned(hero_id: int, civ_id: int, _type: Enums.HeroType) -> void:
 	var hero := GameState.get_hero(hero_id)
 	var civ := GameState.get_civilization(civ_id)
 	if hero and civ:
-		_log("[color=#5ce]%s gains hero %s (%s)[/color]" % [
+		_log("[color=#5ce][HERO] %s gains hero %s (%s)[/color]" % [
 			civ.civ_name, hero.hero_name, Enums.HeroType.keys()[hero.type]
 		])
+		if is_auto_playing:
+			_show_toast("%s gains hero %s" % [civ.civ_name, hero.hero_name], Color(0.36, 0.80, 0.88))
+			if civ_id == player_civ_id:
+				_pause_auto_play()
 
 
 func _on_hero_died(hero_id: int, civ_id: int) -> void:
@@ -759,7 +933,9 @@ func _on_golden_age_started(civ_id: int) -> void:
 			ff_should_pause = true
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
-		_log("[color=#fd5]%s enters a Golden Age[/color]" % civ.civ_name)
+		_log("[color=#fd5][GOLDEN] %s enters a Golden Age[/color]" % civ.civ_name)
+		if is_auto_playing:
+			_show_toast("%s enters a Golden Age" % civ.civ_name, Color(0.99, 0.84, 0.33))
 
 
 func _on_golden_age_ended(civ_id: int) -> void:
@@ -777,7 +953,9 @@ func _on_tech_emerged(civ_id: int, tech_name: String) -> void:
 			ff_should_pause = true
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
-		_log("[color=#5e5]%s discovers %s[/color]" % [civ.civ_name, tech_name])
+		_log("[color=#5e5][TECH] %s discovers %s[/color]" % [civ.civ_name, tech_name])
+		if is_auto_playing:
+			_show_toast("%s discovers %s" % [civ.civ_name, tech_name], Color(0.37, 0.88, 0.37))
 
 
 func _on_civ_collapsed(civ_id: int) -> void:
@@ -786,7 +964,10 @@ func _on_civ_collapsed(civ_id: int) -> void:
 		ff_should_pause = true  # Always pause on any collapse
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
-		_log("[color=#f33]%s has COLLAPSED[/color]" % civ.civ_name)
+		_log("[color=#f33][COLLAPSE] %s has COLLAPSED[/color]" % civ.civ_name)
+		if is_auto_playing:
+			_show_toast("%s has COLLAPSED" % civ.civ_name, Color(0.95, 0.2, 0.2))
+			_pause_auto_play()
 
 
 func _on_battle_resolved(region_id: int, attacker_id: int, _defender_id: int, winner_id: int) -> void:
@@ -796,7 +977,9 @@ func _on_battle_resolved(region_id: int, attacker_id: int, _defender_id: int, wi
 	var winner := GameState.get_civilization(winner_id)
 	if region and winner:
 		var result_text := "won" if winner_id == attacker_id else "defended"
-		_log("%s %s battle for %s" % [winner.civ_name, result_text, region.region_name])
+		_log("[color=#da8][BATTLE] %s %s battle for %s[/color]" % [winner.civ_name, result_text, region.region_name])
+		if is_auto_playing and (attacker_id == player_civ_id or _defender_id == player_civ_id):
+			_show_toast("%s %s battle for %s" % [winner.civ_name, result_text, region.region_name], Color(0.85, 0.66, 0.5))
 
 
 func _on_food_shortage(civ_id: int, stockpile: int) -> void:
@@ -822,7 +1005,7 @@ func _on_ai_decision(civ_id: int, decision_type: String, details: Dictionary) ->
 		var civ := GameState.get_civilization(civ_id)
 		if civ:
 			var cost_text := " (-%d prod)" % details.get("cost", 0) if details.has("cost") else ""
-			_log("[color=#8c8]%s expands into %s%s[/color]" % [
+			_log("[color=#8c8][EXPAND] %s expands into %s%s[/color]" % [
 				civ.civ_name, details.get("region", "?"), cost_text
 			])
 
@@ -830,7 +1013,7 @@ func _on_ai_decision(civ_id: int, decision_type: String, details: Dictionary) ->
 func _on_infrastructure_upgraded(civ_id: int, region_name: String, new_level: int) -> void:
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
-		_log("[color=#9ab]%s upgrades %s to level %d[/color]" % [
+		_log("[color=#9ab][INFRA] %s upgrades %s to level %d[/color]" % [
 			civ.civ_name, region_name, new_level
 		])
 
@@ -839,14 +1022,16 @@ func _on_peace_declared(civ_a_id: int, civ_b_id: int) -> void:
 	var a := GameState.get_civilization(civ_a_id)
 	var b := GameState.get_civilization(civ_b_id)
 	if a and b:
-		_log("[color=#8b8]%s and %s declare peace[/color]" % [a.civ_name, b.civ_name])
+		_log("[color=#8b8][PEACE] %s and %s declare peace[/color]" % [a.civ_name, b.civ_name])
+		if is_auto_playing:
+			_show_toast("%s and %s declare peace" % [a.civ_name, b.civ_name], Color(0.55, 0.73, 0.55))
 
 
 func _on_dev_tier_changed(region_id: int, civ_id: int, old_tier: String, new_tier: String) -> void:
 	var region := GameState.get_region(region_id)
 	var civ := GameState.get_civilization(civ_id)
 	if region and civ:
-		_log("[color=#a8d]%s: %s -> %s[/color]" % [region.region_name, old_tier, new_tier])
+		_log("[color=#a8d][DEV] %s: %s -> %s[/color]" % [region.region_name, old_tier, new_tier])
 
 
 func _on_deposit_depleted(region_id: int, _civ_id: int, resource_name: String) -> void:

@@ -414,7 +414,7 @@ func _unhandled_input(event: InputEvent) -> void:
 func _on_region_selected(region_id: int) -> void:
 	current_region_id = region_id
 	_update_display()
-	visible = true
+	_slide_in()
 
 
 func _process(delta: float) -> void:
@@ -547,8 +547,26 @@ func _on_region_owner_changed(region_id: int, _old: int, _new: int) -> void:
 
 
 func _close() -> void:
-	visible = false
-	current_region_id = -1
+	_slide_out()
+
+
+func _slide_in() -> void:
+	var target_x := position.x
+	# Only animate from offscreen if not already visible
+	if not visible:
+		position.x = get_viewport_rect().size.x
+	visible = true
+	var tween := create_tween()
+	tween.tween_property(self, "position:x", target_x, 0.3).set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_CUBIC)
+
+
+func _slide_out() -> void:
+	var tween := create_tween()
+	tween.tween_property(self, "position:x", get_viewport_rect().size.x, 0.2).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CUBIC)
+	tween.tween_callback(func():
+		visible = false
+		current_region_id = -1
+	)
 
 
 # ==================== ACTIONS ====================

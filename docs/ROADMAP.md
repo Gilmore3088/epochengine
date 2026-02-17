@@ -1,5 +1,36 @@
 # Roadmap & Milestones
 
+## Current State Snapshot (as of Feb 16, 2026)
+- Phase 2 simulation complete: governance, dev tiers, supply, resources, visual polish
+- 249 tests passing, 834 assertions
+- 20-seed benchmark: all 8 acceptance criteria PASS (avg 503ms/500yr, 16/20 multi-civ survival)
+
+## Status & Goals
+
+### Current Status
+- Core simulation loop is feature-complete for Phase 2
+- Visual polish complete: auto-play, map flashes, toasts, event log, panel animations
+- Player agency systems exist (action queue, player civ tracking, UI controls)
+- Map polish partially done (terrain render pass, overlay cycling), seed/bounds/camera tuning pending
+- Supply/resource overlays not yet visualized on map
+
+### Short-Term Goals (next 2-6 weeks)
+- Supply overlay + resource overlay visualization on map
+- Map polish: seed retune, ocean/compass, camera centering
+- Remaining Sprint H items (renewable resource degradation, resource overlay)
+
+### Long-Term Goals (Phase 3+)
+- Town layer prototype (region sub-map, town connectivity, building construction)
+- Climate and migration systems tied to supply/resource networks
+- Industrial pressure tradeoffs and cultural spread via trade routes
+- Solar expansion with orbital regions and optional tactical layer
+
+### Task Backlog (Concrete, Ordered)
+1) Supply overlay visualization (Sprint G)
+2) Resource overlay visualization (Sprint H)
+3) Map polish: seed retune -> ocean/compass -> camera centering
+4) Town layer MVP plan + data model extension proposal
+
 ## Phase 1 -- Earth Core [COMPLETE]
 
 ### Month 1: Foundation
@@ -12,14 +43,14 @@
 ### Month 2: Conflict & Expansion
 - [x] Expansion logic (AI)
 - [x] Auto-resolve war system
-- [x] Supply simplified to adjacency to capital
+- [x] Supply routing system (Dijkstra from capital with terrain throughput)
 - [x] Terrain-based defense modifiers
 
 ### Month 3: Heroes & Polish
 - [x] Hero system (3 types: General, Reformer, Visionary)
 - [x] Golden age mechanic
 - [x] Fast-forward (5x / 10x)
-- [x] 500-year stability benchmark (129 tests, 467 assertions)
+- [x] 500-year stability benchmark (tests pass, see CI)
 - [x] Save/load system
 
 ### Results
@@ -56,7 +87,7 @@
 ### Stage 3: Region Size Factor [COMPLETE]
 - [x] Voronoi polygon area calculation (Shoelace formula)
 - [x] size_factor applied to carrying capacity, food/production yields, defense
-- [x] All 129 tests pass, benchmark equilibrium maintained
+- [x] Tests pass (224 tests, 633 assertions as of Feb 17, 2026)
 
 ### UX Improvements [COMPLETE]
 - [x] Zoom +/- buttons (MacBook trackpad support)
@@ -77,29 +108,54 @@
 - [x] Future-compat placeholders on RegionData (urbanization_level, town_count, supply_value)
 - [x] New terrain types: STEPPE, VOLCANIC_RIDGE (enums + constants, no regions assigned)
 - [x] Save/load for all new fields (backward compatible)
-- [x] 148 tests pass, benchmark equilibrium maintained (6/10 multi-civ, avg 1.7)
+- [x] Tests pass (224 tests, 633 assertions as of Feb 17, 2026)
 
-### Sprint F: Map Polish [NOT STARTED]
+### Stage 5: Development Tiers [COMPLETE]
+- [x] DevelopmentTier enum (Wild → Advanced)
+- [x] Era system (Prehistoric → Future) with tech-based thresholds
+- [x] Tier gates by infra, pop density, stability, governance, era, resources
+- [x] Tier effects on economy, defense, and admin capacity
+
+### Sprint V1: Visual Polish + Auto-Play [COMPLETE]
+- [x] Auto-play toggle (P key, Timer-based, 0.8s default)
+- [x] Speed controls during auto-play (1/2/3 keys: 1.2s/0.8s/0.3s)
+- [x] Auto-pause on player war, collapse, hero spawn
+- [x] Map event flashes (green=expansion, red=conquest, dark=collapse)
+- [x] Toast notifications (slide-down, color-coded, max 3 stacked)
+- [x] Top bar polish (28px year, 160px stability bar with %, era badge)
+- [x] Event log prefixes and color-coding ([WAR], [PEACE], [TECH], etc.)
+- [x] Region panel slide-in/out animations
+- [x] Context menu dark theme with gold accents
+
+### Benchmark B1: 20-Seed CSV Export [COMPLETE]
+- [x] Expanded from 10 to 20 seeds
+- [x] CSV export to user://benchmark_results.csv
+- [x] All 8 acceptance criteria PASS (16/20 multi-civ, avg 2.1 alive, 46 wars)
+
+### Sprint F: Map Polish [IN PROGRESS]
+- [x] Terrain rendering pass (dual-mode textures + fallback)
+- [x] Map overlay cycling (Tab key)
 - [ ] Retune seed positions (tighten continent bounds)
 - [ ] Recompute ocean/compass for new bounds
 - [ ] Center camera on new continent
 
-### Sprint G: Supply & Logistics [NOT STARTED]
-- [ ] Dijkstra supply system from capital
-- [ ] Terrain-based throughput
-- [ ] Combat integration (supply gradient)
-- [ ] Stability integration (disconnected penalty gradient)
-- [ ] Starvation attrition
-- [ ] Enemy interdiction (cutting supply lines)
-- [ ] AI supply awareness
+### Sprint G: Supply & Logistics [IN PROGRESS]
+- [x] Dijkstra supply system from capital
+- [x] Terrain-based throughput
+- [x] Combat integration (supply gradient)
+- [x] Stability integration (disconnected penalty gradient)
+- [x] Starvation attrition
+- [x] Enemy interdiction (cutting supply lines)
+- [x] AI supply awareness
 - [ ] Supply overlay visualization
 
-### Sprint H: Resource Depth [NOT STARTED]
-- [ ] Resource deposits by terrain (coal, oil, rare earths, wood)
-- [ ] Extraction and depletion system
+### Sprint H: Resource Depth [IN PROGRESS]
+- [x] Resource deposits by terrain (fuels, rare materials, etc.)
+- [x] Extraction and depletion system
 - [ ] Renewable resource degradation
-- [ ] Economy integration (effective yields)
-- [ ] Resource overlay, AI awareness, save/load
+- [x] Economy integration (effective yields)
+- [x] Save/load support for resource stockpiles and logs
+- [ ] Resource overlay + AI awareness (surface to UI)
 
 ---
 

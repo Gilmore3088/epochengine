@@ -5,7 +5,8 @@ extends Node
 ## Usage: godot --headless --path . res://tests/benchmark_500yr.tscn
 
 const YEARS := 500
-const RUNS := 10
+const RUNS := 20
+const CSV_PATH := "user://benchmark_results.csv"
 
 var run_results: Array[Dictionary] = []
 
@@ -29,6 +30,7 @@ func _run_all() -> void:
 
 	print("")
 	_print_aggregate()
+	_export_csv()
 	get_tree().quit()
 
 
@@ -277,6 +279,49 @@ func _print_aggregate() -> void:
 		"PASS" if total_peace_treaties > 0 else "FAIL", total_peace_treaties
 	])
 	print("")
+
+
+func _export_csv() -> void:
+	var file := FileAccess.open(CSV_PATH, FileAccess.WRITE)
+	if not file:
+		print("ERROR: Cannot write CSV to %s" % CSV_PATH)
+		return
+
+	# Header
+	file.store_csv_line(PackedStringArray([
+		"run", "seed", "time_ms", "peak_10yr_ms", "years",
+		"civs_alive", "total_pop", "collapses", "golden_ages",
+		"wars", "battles", "peace_treaties", "expansions", "techs",
+		"heroes_spawned", "heroes_died", "shortages", "infra_upgrades",
+	]))
+
+	# Rows
+	for i in run_results.size():
+		var r: Dictionary = run_results[i]
+		file.store_csv_line(PackedStringArray([
+			str(i + 1),
+			str(i * 31337 + 42),
+			str(r["total_time_ms"]),
+			str(r["time_per_10yr_ms"]),
+			str(r["years_completed"]),
+			str(r["final_civs_alive"]),
+			str(r["final_total_pop"]),
+			str(r["collapses"]),
+			str(r["golden_ages"]),
+			str(r["wars"]),
+			str(r["battles"]),
+			str(r["peace_treaties"]),
+			str(r["expansions"]),
+			str(r["techs"]),
+			str(r["heroes_spawned"]),
+			str(r["heroes_died"]),
+			str(r["shortages"]),
+			str(r["infrastructure_upgrades"]),
+		]))
+
+	file.close()
+	var abs_path := ProjectSettings.globalize_path(CSV_PATH)
+	print("CSV exported to: %s" % abs_path)
 
 
 func _fmt_pop(n: int) -> String:

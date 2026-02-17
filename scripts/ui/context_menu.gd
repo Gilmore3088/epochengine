@@ -15,6 +15,29 @@ const ITEM_UPGRADE_INFRA := 3
 func _ready() -> void:
 	id_pressed.connect(_on_item_pressed)
 	EventBus.region_right_clicked.connect(show_for_region)
+	_apply_theme()
+
+
+func _apply_theme() -> void:
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.07, 0.10, 0.95)
+	panel_style.border_color = UITheme.GOLD_DIM
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(4)
+	panel_style.set_content_margin_all(6)
+	add_theme_stylebox_override("panel", panel_style)
+
+	var hover_style := StyleBoxFlat.new()
+	hover_style.bg_color = Color(0.20, 0.17, 0.12, 0.90)
+	hover_style.set_corner_radius_all(2)
+	hover_style.set_content_margin_all(6)
+	add_theme_stylebox_override("hover", hover_style)
+
+	add_theme_font_override("font", UITheme.get_body_bold_font())
+	add_theme_font_size_override("font_size", 14)
+	add_theme_color_override("font_color", UITheme.PARCHMENT)
+	add_theme_color_override("font_hover_color", UITheme.GOLD)
+	add_theme_color_override("font_disabled_color", Color(0.4, 0.38, 0.35))
 
 
 func show_for_region(region_id: int, screen_pos: Vector2) -> void:

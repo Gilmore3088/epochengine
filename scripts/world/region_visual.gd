@@ -460,9 +460,31 @@ func _on_deselected() -> void:
 	update_appearance()
 
 
-func _on_region_owner_changed(region_id: int, _old_owner: int, _new_owner: int) -> void:
+func _on_region_owner_changed(region_id: int, old_owner: int, new_owner: int) -> void:
 	if region_data and region_id == region_data.id:
+		_flash_ownership_change(old_owner, new_owner)
 		update_appearance()
+
+
+func _flash_ownership_change(old_owner: int, new_owner: int) -> void:
+	## Brief color flash when region changes hands.
+	var flash_color: Color
+	var duration: float
+	if old_owner < 0 and new_owner >= 0:
+		# Expansion into neutral territory - green flash
+		flash_color = Color(0.5, 1.3, 0.5)
+		duration = 0.3
+	elif old_owner >= 0 and new_owner < 0:
+		# Collapse to neutral - dark fade
+		flash_color = Color(0.4, 0.3, 0.3)
+		duration = 0.5
+	else:
+		# Conquest - red flash
+		flash_color = Color(1.3, 0.4, 0.4)
+		duration = 0.5
+	modulate = flash_color
+	var tween := create_tween()
+	tween.tween_property(self, "modulate", Color.WHITE, duration).set_ease(Tween.EASE_OUT)
 
 
 func _on_zoom_changed(zoom_level: float) -> void:
