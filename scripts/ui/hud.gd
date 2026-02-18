@@ -299,6 +299,16 @@ func _build_top_bar() -> void:
 	UITheme.style_button(timeline_btn)
 	info_group.add_child(timeline_btn)
 
+	var diplo_btn := Button.new()
+	diplo_btn.text = "Diplomacy(D)"
+	diplo_btn.pressed.connect(func() -> void:
+		var dp := get_node_or_null("DiplomacyPanel") as DiplomacyPanel
+		if dp:
+			dp.toggle()
+	)
+	UITheme.style_button(diplo_btn)
+	info_group.add_child(diplo_btn)
+
 
 func _add_separator(parent: Control) -> void:
 	var sep := VSeparator.new()
@@ -824,7 +834,12 @@ func _unhandled_input(event: InputEvent) -> void:
 	elif event.is_action_pressed("open_timeline"):
 		EventBus.open_timeline.emit()
 	if event is InputEventKey and event.pressed:
-		if event.keycode == KEY_V:
+		if event.keycode == KEY_D:
+			var dp := get_node_or_null("DiplomacyPanel") as DiplomacyPanel
+			if dp:
+				dp.toggle()
+				get_viewport().set_input_as_handled()
+		elif event.keycode == KEY_V:
 			var tracker := get_node_or_null("VictoryTracker") as VictoryTracker
 			if tracker:
 				tracker.toggle()
@@ -1193,6 +1208,10 @@ func _build_info_panels() -> void:
 
 	var timeline := TimelinePanel.new()
 	add_child(timeline)
+
+	var diplomacy_panel := DiplomacyPanel.new()
+	diplomacy_panel.name = "DiplomacyPanel"
+	add_child(diplomacy_panel)
 
 	var town_panel := TownPanel.new()
 	town_panel.name = "TownPanel"
