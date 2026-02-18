@@ -305,23 +305,23 @@ func _add_civ_card(player: CivilizationData, civ: CivilizationData) -> void:
 
 
 func _on_declare_war(target_civ_id: int) -> void:
-	var action := {"type": "declare_war", "target_id": target_civ_id}
-	EventBus.player_action_queued.emit("declare_war", action)
+	var action := {"type": "declare_war", "target_civ_id": target_civ_id}
 	PlayerActions.queue_action(action)
+	EventBus.player_action_queued.emit("declare_war", action)
 	_rebuild_content()
 
 
 func _on_seek_peace(target_civ_id: int) -> void:
-	var action := {"type": "seek_peace", "target_id": target_civ_id}
-	EventBus.player_action_queued.emit("seek_peace", action)
+	var action := {"type": "seek_peace", "target_civ_id": target_civ_id}
 	PlayerActions.queue_action(action)
+	EventBus.player_action_queued.emit("seek_peace", action)
 	_rebuild_content()
 
 
 func _on_seek_alliance(target_civ_id: int) -> void:
-	var action := {"type": "seek_alliance", "target_id": target_civ_id}
-	EventBus.player_action_queued.emit("seek_alliance", action)
+	var action := {"type": "seek_alliance", "target_civ_id": target_civ_id}
 	PlayerActions.queue_action(action)
+	EventBus.player_action_queued.emit("seek_alliance", action)
 	_rebuild_content()
 
 

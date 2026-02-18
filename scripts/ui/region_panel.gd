@@ -620,11 +620,16 @@ func _update_display() -> void:
 			upgrade_btn.text = "Upgrade Infrastructure (-%d prod)" % cost
 			upgrade_btn.disabled = player_civ.production_stockpile < cost
 		# Found town button (in actions area, separate from towns_container)
-		if TownSimulation.can_found_town(region, player_civ):
+		if region.population >= Constants.TOWN_MIN_POP_TO_FOUND:
 			var town_cost := TownSimulation.calculate_town_cost(region)
 			found_town_btn.text = "Found Town (-%d prod)" % town_cost
 			found_town_btn.visible = true
-			found_town_btn.disabled = player_civ.production_stockpile < town_cost
+			var can_afford := player_civ.production_stockpile >= town_cost
+			found_town_btn.disabled = not can_afford
+			if not can_afford:
+				found_town_btn.tooltip_text = "Need %d production (have %d)" % [town_cost, player_civ.production_stockpile]
+			else:
+				found_town_btn.tooltip_text = "Found a new town in this region"
 	elif region.is_neutral():
 		# Neutral region - show claim if adjacent to player territory AND visible
 		if vis == Enums.VisibilityState.VISIBLE and _is_adjacent_to_player(region):
