@@ -172,25 +172,25 @@ func test_expansion_cost_below_threshold() -> void:
 	var civ := _make_civ()
 	# 5 regions, threshold is 10 -> no escalation
 	var cost := EconomySimulation.calculate_expansion_cost(civ, 5)
-	assert_eq(cost, 15, "Base cost should be 15 below threshold")
+	assert_eq(cost, 20, "Base cost should be 20 below threshold")
 
 
 func test_expansion_cost_above_threshold() -> void:
 	var civ := _make_civ()
-	# 8 regions, base admin capacity is 5 -> 3 excess * 5 = 15 extra + 15 base = 30
+	# 8 regions, base admin capacity is 5 -> 3 excess * 8 = 24 extra + 20 base = 44
 	var cost := EconomySimulation.calculate_expansion_cost(civ, 8)
-	assert_eq(cost, 30, "Cost should escalate above admin capacity base")
+	assert_eq(cost, 44, "Cost should escalate above admin capacity base")
 
 
 func test_can_afford_expansion_true() -> void:
 	var civ := _make_civ(0, 50, 0.0, 1000)
-	# Cost at 5 regions = 15, has 50 prod and 1000 pop >= 300
+	# Cost at 5 regions = 20, has 50 prod and 1000 pop >= 300
 	assert_true(EconomySimulation.can_afford_expansion(civ, 5))
 
 
 func test_can_afford_expansion_no_production() -> void:
 	var civ := _make_civ(0, 10, 0.0, 1000)
-	# Cost at 5 regions = 15, only 10 prod
+	# Cost at 5 regions = 20, only 10 prod
 	assert_false(EconomySimulation.can_afford_expansion(civ, 5))
 
 
@@ -208,8 +208,8 @@ func test_pay_expansion_cost() -> void:
 	source.population = 4000
 
 	var cost := EconomySimulation.pay_expansion_cost(civ, 5, source)
-	assert_eq(cost, 15, "Should return cost paid")
-	assert_eq(civ.production_stockpile, 85, "Should deduct production cost")
+	assert_eq(cost, 20, "Should return cost paid")
+	assert_eq(civ.production_stockpile, 80, "Should deduct production cost")
 	# Settlers: min(4000/4, 300) = 300
 	assert_eq(source.population, 3700, "Should move 300 settlers from source")
 

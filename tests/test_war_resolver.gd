@@ -46,7 +46,10 @@ func test_stronger_army_wins() -> void:
 
 
 func test_mountains_help_defender() -> void:
-	var attacker := _make_civ(0, 100.0, 50.0)
+	# Attacker stronger than defender so some battles are actually lost,
+	# allowing terrain effect to show (compact defense bonus otherwise
+	# makes equal-strength defenders win all battles).
+	var attacker := _make_civ(0, 150.0, 50.0)
 	var defender := _make_civ(1, 100.0, 50.0)
 
 	var plains := _make_region(0, 1, Enums.TerrainType.PLAINS)
@@ -56,12 +59,12 @@ func test_mountains_help_defender() -> void:
 	var mountain_def_wins := 0
 
 	for i in 200:
-		seed(i)
+		GameState.sim_rng.seed = i
 		var r1 := WarResolver.resolve_battle(attacker, defender, plains)
 		if r1["winner_id"] == 1:
 			plains_def_wins += 1
 
-		seed(i)
+		GameState.sim_rng.seed = i
 		var r2 := WarResolver.resolve_battle(attacker, defender, mountains)
 		if r2["winner_id"] == 1:
 			mountain_def_wins += 1

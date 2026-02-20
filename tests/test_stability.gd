@@ -87,7 +87,7 @@ func test_collapse_above_threshold_resets() -> void:
 
 func test_collapse_triggers_after_consecutive_years() -> void:
 	var civ := _make_civ(3.0)  # Below COLLAPSE_STABILITY_THRESHOLD (5.0)
-	civ.consecutive_low_stability_years = 9  # 10th call triggers
+	civ.consecutive_low_stability_years = Constants.COLLAPSE_CONSECUTIVE_YEARS - 1  # triggers on this call
 
 	assert_true(StabilitySimulation.check_collapse(civ),
 		"Should collapse after %d consecutive low-stability years" % Constants.COLLAPSE_CONSECUTIVE_YEARS)
@@ -95,7 +95,7 @@ func test_collapse_triggers_after_consecutive_years() -> void:
 
 func test_collapse_does_not_trigger_early() -> void:
 	var civ := _make_civ(3.0)  # Below COLLAPSE_STABILITY_THRESHOLD (5.0)
-	civ.consecutive_low_stability_years = 8  # 9th call, not yet
+	civ.consecutive_low_stability_years = Constants.COLLAPSE_CONSECUTIVE_YEARS - 2  # not yet
 
 	assert_false(StabilitySimulation.check_collapse(civ),
 		"Should not collapse before %d years" % Constants.COLLAPSE_CONSECUTIVE_YEARS)
