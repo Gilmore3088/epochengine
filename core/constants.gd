@@ -52,6 +52,24 @@ const ALLIANCE_BASE_CHANCE := 0.06  # base probability of seeking alliance per n
 const ALLIANCE_STABILITY_THRESHOLD := 50.0  # min stability to seek alliance
 const ALLIANCE_SHARED_ENEMY_BONUS := 0.15  # extra chance if both at war with same civ
 
+# --- Non-Aggression Pacts ---
+const NAP_DURATION := 15
+const NAP_BREAK_STABILITY_PENALTY := 8.0
+const NAP_BASE_CHANCE := 0.04
+
+# --- Trade Agreements ---
+const TRADE_FOOD_BONUS_PERCENT := 0.05
+const TRADE_PRODUCTION_BONUS_PERCENT := 0.05
+const TRADE_STABILITY_THRESHOLD := 45.0
+const TRADE_BASE_CHANCE := 0.06
+
+# --- Tribute ---
+const TRIBUTE_STRENGTH_RATIO := 1.5
+const TRIBUTE_PRODUCTION_AMOUNT := 10
+const TRIBUTE_REFUSAL_WAR_CHANCE := 0.35
+const TRIBUTE_COOLDOWN_YEARS := 8
+const TRIBUTE_BASE_CHANCE := 0.03
+
 # --- Heroes ---
 const HERO_LIFESPAN_MIN := 40
 const HERO_LIFESPAN_MAX := 80
@@ -113,8 +131,28 @@ const MILITARY_REINFORCE_RATE := 0.12  # fraction of surplus production -> milit
 const MILITARY_REINFORCE_MAX := 20.0  # max military gain per year from production
 const SHORTAGE_THRESHOLD := -50  # stockpile below this = critical shortage
 const INFRASTRUCTURE_MAX_LEVEL := 5
-const INFRASTRUCTURE_UPGRADE_COST := 15  # base cost * (level+1)
+const INFRASTRUCTURE_UPGRADE_COST := 10  # base cost * (level+1)
 const INFRASTRUCTURE_AUTO_INVEST_THRESHOLD := 40  # min surplus before AI upgrades
+
+# Infrastructure tier names (display only — level int stays in data model)
+const INFRASTRUCTURE_NAMES := {
+	0: "Trails",
+	1: "Paths",
+	2: "Roads",
+	3: "Railways",
+	4: "Highways",
+	5: "Maglev Network",
+}
+
+# Tech required to upgrade TO this level (empty string = no requirement)
+const INFRASTRUCTURE_TECH_GATES := {
+	0: "",
+	1: "",
+	2: "Bronze Working",
+	3: "Steam Power",
+	4: "Electricity",
+	5: "Fusion Research",
+}
 
 # --- Admin Capacity & Overextension ---
 const ADMIN_CAPACITY_BASE := 5  # base regions a civ can manage
@@ -142,6 +180,64 @@ const INFRA_MILITARY_REINFORCE_BONUS := 0.05  # 5% faster military reinforce per
 # --- Epoch / Era ---
 const ERA_TECH_THRESHOLDS := [0, 3, 6, 9]  # tech count boundaries per era
 const ERA_TIER_CAPS := [2, 3, 4, 5]  # max practical dev tier per era
+const ERA_NAMES := {0: "Prehistoric", 1: "Classical", 2: "Industrial", 3: "Future"}
+
+# --- Geographic Features ---
+const RIVER_FOOD_BONUS := 1
+const RIVER_TRADE_BONUS := 1
+const RIVER_DEFENSE_PENALTY := -0.05
+const RIVER_SUPPLY_THROUGHPUT_BONUS := 0.15
+const LAKE_FOOD_BONUS := 1
+const LAKE_DEFENSE_BONUS := 0.05
+const ELEVATION_BY_TERRAIN := {
+	# RIVER_BASIN=0, PLAINS=1, MOUNTAINS=2, DESERT=3, JUNGLE=4,
+	# COASTLINE=5, TUNDRA=6, STEPPE=7, VOLCANIC_RIDGE=8
+	0: 0, 1: 0, 2: 3, 3: 1, 4: 1, 5: 0, 6: 2, 7: 1, 8: 3,
+}
+
+# --- Natural Disasters ---
+const DISASTER_RISKS := {
+	# DisasterType: {terrains: [TerrainType ints], annual_pct, pop_loss, infra_dmg, yield_penalty, duration}
+	0: {"terrains": [8], "annual_pct": 0.03, "pop_loss": 0.10, "infra_dmg": 1, "yield_penalty": 0.30, "duration": 3},  # VOLCANIC_ERUPTION
+	1: {"terrains": [2, 8], "annual_pct": 0.02, "pop_loss": 0.05, "infra_dmg": 1, "yield_penalty": 0.15, "duration": 2},  # EARTHQUAKE
+	2: {"terrains": [0], "annual_pct": 0.04, "pop_loss": 0.03, "infra_dmg": 0, "yield_penalty": 0.10, "duration": 1},  # FLOOD (river_basin with river)
+	3: {"terrains": [1, 3, 7], "annual_pct": 0.03, "pop_loss": 0.02, "infra_dmg": 0, "yield_penalty": 0.25, "duration": 3},  # DROUGHT
+}
+
+# --- Governors / Political Geography ---
+const CAPITAL_STABILITY_BONUS := 5.0
+const CAPITAL_PRODUCTION_BONUS := 0.15
+const CAPITAL_DEFENSE_BONUS := 0.10
+const LOBBY_ANNUAL_CHANCE := 0.15
+const LOBBY_IGNORE_STABILITY_PENALTY := 2.0
+const LOBBY_FULFILL_STABILITY_BONUS := 3.0
+const INFLUENCE_WEIGHT_POP := 0.40
+const INFLUENCE_WEIGHT_DEV := 0.30
+const INFLUENCE_WEIGHT_INFRA := 0.20
+const INFLUENCE_WEIGHT_CAPITAL := 0.10
+
+# --- Future Era ---
+const TERRAFORM_COST := 100
+const TERRAFORM_DURATION := 10
+const SPACE_PROGRAM_KNOWLEDGE_REQ := 85.0
+const SPACE_PROGRAM_PROD_COST := 200
+const RECLAMATION_COST := 80
+const RECLAMATION_DURATION := 5
+const RECLAMATION_SIZE_BONUS := 0.30
+const RECLAMATION_MAX_BONUS := 0.60
+const TERRAFORM_TARGETS := {
+	3: [1, 0],  # Desert -> Plains or River Basin
+	6: [1, 7],  # Tundra -> Plains or Steppe
+	7: [1, 0],  # Steppe -> Plains or River Basin
+	2: [8],     # Mountains -> Volcanic Ridge
+}
+
+# --- Cartography ---
+const CARTOGRAPHY_REVEAL_THRESHOLDS := [0.0, 0.5, 0.8]  # skill levels for 1/2/3 hop reveal
+const CARTOGRAPHY_GROWTH_EXPLORER := 0.01
+const CARTOGRAPHY_GROWTH_TRADE := 0.005
+const CARTOGRAPHY_GROWTH_KNOWLEDGE := 0.002
+const CARTOGRAPHY_LIVE_DATA_THRESHOLD := 0.6
 
 # --- Governance Tiers ---
 const GOVERNANCE_DEMOTION_HYSTERESIS_YEARS := 5
@@ -333,9 +429,26 @@ const TERRAIN_TILE_SCALE_OVERRIDE := {
 }
 
 # --- Political Tint Overlay ---
-const TINT_ALPHA_POLITICAL := 0.35  # owned regions in political mode
-const TINT_ALPHA_NEUTRAL := 0.20  # unowned regions in political mode
+const TINT_ALPHA_POLITICAL := 0.18  # owned regions in political mode
+const TINT_ALPHA_NEUTRAL := 0.08  # unowned regions in political mode
+const TINT_ALPHA_BORDER := 0.22  # border regions (adjacent to different civ)
 const TINT_ALPHA_HEATMAP := 0.70  # supply, resources, alliances overlays
+
+# --- Empire Border Styling ---
+const EMPIRE_BORDER_INNER_GLOW_ALPHA := 0.18
+const EMPIRE_BORDER_OUTER_GLOW_ALPHA := 0.12
+const EMPIRE_BORDER_MAIN_ALPHA := 0.75
+const EMPIRE_BORDER_INNER_GLOW_EXTRA_WIDTH := 8.0
+const EMPIRE_BORDER_OUTER_GLOW_EXTRA_WIDTH := 14.0
+const SAME_EMPIRE_PROVINCE_BORDER_ALPHA := 0.15
+const SAME_EMPIRE_PROVINCE_BORDER_WIDTH_MULT := 0.5
+
+# --- Edge Blending ---
+const EDGE_BLEND_LAYERS := 3
+const EDGE_BLEND_BASE_WIDTH := 6.0
+const EDGE_BLEND_WIDTH_STEP := 5.0
+const EDGE_BLEND_BASE_ALPHA := 0.12
+const EDGE_BLEND_ALPHA_DECAY := 0.04
 
 # Per-terrain tint strength override. 0.0 = use TINT_ALPHA_POLITICAL default.
 # Designers: useful when a terrain texture clashes with civ colors at default alpha.
@@ -353,6 +466,41 @@ const TERRAIN_TINT_ALPHA_OVERRIDE := {
 
 # --- Per-Region Variation ---
 const VARIATION_BRIGHTNESS_RANGE := 0.03  # +/- 3% brightness per region
+
+# --- Political System ---
+const LEGITIMACY_START := 60.0
+const LEGITIMACY_LERP := 0.25
+const LEGITIMACY_GOV_TIER_BONUS := 2.5
+const LEGITIMACY_FOOD_FACTOR_SCALE := 2.0
+const LEGITIMACY_WAR_EXHAUST_SCALE := 1.5
+const LEGITIMACY_DISASTER_PENALTY := 2.0
+const LEGITIMACY_SHORTAGE_PENALTY_SCALE := 1.0
+const LEGITIMACY_COUP_THRESHOLD := 30.0
+const COUP_MILITARY_BLOC_THRESHOLD := 0.35
+const COUP_BASE_CHANCE := 0.25
+const DEFAULT_ELECTION_INTERVAL := 5
+
+const POWER_BLOC_DEFAULTS := {
+	"nobles": 0.22,
+	"merchants": 0.18,
+	"military": 0.20,
+	"clergy": 0.16,
+	"commoners": 0.24,
+}
+
+const RULER_FIRST_NAME_POOL := [
+	"Alden", "Bran", "Corin", "Darian", "Edric", "Fen", "Galen", "Hadrian",
+	"Ilan", "Jorin", "Kael", "Lucan", "Marek", "Nolan", "Oren", "Perrin",
+	"Quin", "Ronan", "Soren", "Tavin", "Ulric", "Varr", "Wren", "Xander",
+	"Yorin", "Zarek",
+]
+
+const DYNASTY_NAME_POOL := [
+	"Ashcroft", "Blackstone", "Crownhall", "Duskfall", "Emberlyn", "Frostmere",
+	"Goldmere", "Highwatch", "Ironmark", "Kingswell", "Lionsgate", "Mooncrest",
+	"Nightfall", "Oakshield", "Ravenholt", "Stormvale", "Thornwall", "Valeward",
+	"Whitehelm", "Wyrmspire",
+]
 
 # --- Renewable Resource Degradation ---
 const RENEWABLE_DEGRADATION_RATE := 0.02   # +2% degradation per year under extraction
@@ -378,21 +526,21 @@ const TOWN_NAME_POOL := [
 ]
 
 # --- Building System ---
-const BUILDING_BASE_COST := 10             # base production to construct a building
+const BUILDING_BASE_COST := 6              # base production to construct a building
 const BUILDING_COST_ESCALATION := 1.3      # cost = base * escalation^count_of_same_type
 const BUILDING_MAINTENANCE_PER := 1        # production/yr maintenance per building
 
 
 # Structured building metadata table (keyed by BuildingType int)
 const BUILDING_RULES := {
-	0: {"category": "food", "build_cost": 8, "upkeep_cost": 1, "outputs": {"food": 2, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Stores grain, boosting food output."},
-	1: {"category": "military", "build_cost": 12, "upkeep_cost": 2, "outputs": {"food": 0, "production": 0, "military": 2.0, "stability": 0.0, "defense": 0.05, "tech": 0.0, "trade": 0}, "description": "Trains soldiers and fortifies garrison."},
-	2: {"category": "trade", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 2, "military": 0.0, "stability": 1.0, "defense": 0.0, "tech": 0.0, "trade": 1}, "description": "Commerce hub boosting production and stability."},
-	3: {"category": "military", "build_cost": 14, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.10, "tech": 0.0, "trade": 0}, "description": "Stone fortifications improving defense."},
-	4: {"category": "production", "build_cost": 12, "upkeep_cost": 2, "outputs": {"food": 0, "production": 3, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Artisan workshops for manufacturing."},
-	5: {"category": "knowledge", "build_cost": 15, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 1.0, "trade": 0}, "description": "Repository advancing hidden tech metrics."},
-	6: {"category": "administration", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 3.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Grand monument inspiring civic unity."},
-	7: {"category": "administration", "build_cost": 15, "upkeep_cost": 2, "outputs": {"food": 0, "production": 1, "military": 0.0, "stability": 2.0, "defense": 0.0, "tech": 0.5, "trade": 1}, "description": "Civic center enabling workforce management."},
+	0: {"category": "food", "build_cost": 5, "upkeep_cost": 0, "outputs": {"food": 3, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Stores grain, boosting food output."},
+	1: {"category": "military", "build_cost": 8, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 3.0, "stability": 0.0, "defense": 0.05, "tech": 0.0, "trade": 0}, "description": "Trains soldiers and fortifies garrison."},
+	2: {"category": "trade", "build_cost": 6, "upkeep_cost": 0, "outputs": {"food": 0, "production": 3, "military": 0.0, "stability": 1.0, "defense": 0.0, "tech": 0.0, "trade": 1}, "description": "Commerce hub boosting production and stability."},
+	3: {"category": "military", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.10, "tech": 0.0, "trade": 0}, "description": "Stone fortifications improving defense."},
+	4: {"category": "production", "build_cost": 7, "upkeep_cost": 1, "outputs": {"food": 0, "production": 4, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Artisan workshops for manufacturing."},
+	5: {"category": "knowledge", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 0.0, "defense": 0.0, "tech": 1.5, "trade": 0}, "description": "Repository advancing hidden tech metrics."},
+	6: {"category": "administration", "build_cost": 6, "upkeep_cost": 0, "outputs": {"food": 0, "production": 0, "military": 0.0, "stability": 3.0, "defense": 0.0, "tech": 0.0, "trade": 0}, "description": "Grand monument inspiring civic unity."},
+	7: {"category": "administration", "build_cost": 10, "upkeep_cost": 1, "outputs": {"food": 0, "production": 1, "military": 0.0, "stability": 2.0, "defense": 0.0, "tech": 0.5, "trade": 1}, "description": "Civic center enabling workforce management."},
 }
 
 # Building names for display
@@ -442,3 +590,129 @@ const SPENDING_PRIORITIES := {
 	3: {"food": 0.75, "production": 0.75, "military": 1.6},
 }
 const SPENDING_PRIORITY_COOLDOWN_YEARS := 5
+
+# --- Trait Evolution ---
+const TRAIT_MIN := 0.1
+const TRAIT_MAX := 0.9
+const TRAIT_TAG_HIGH_THRESHOLD := 0.6
+const TRAIT_TAG_LOW_THRESHOLD := 0.3
+const TRAIT_ANNUAL_DRIFT_MAGNITUDE := 0.01
+const TRAIT_BATTLE_WIN_AGGRESSION := 0.02
+const TRAIT_BATTLE_LOSE_AGGRESSION := -0.02
+const TRAIT_BATTLE_LOSE_DIPLOMACY := 0.02
+const TRAIT_GOLDEN_AGE_START_REINFORCE := 0.03
+const TRAIT_GOLDEN_AGE_END_REGRESS := 0.01
+const TRAIT_HERO_INFLUENCE_PER_YEAR := 0.01
+const TRAIT_EXPANSION_CAPTURE := 0.02
+const TRAIT_ALLIANCE_FORMED_DIPLOMACY := 0.02
+const TRAIT_ALLIANCE_BROKEN_DIPLOMACY := -0.02
+const TRAIT_ERA_MODERATION := 0.02
+const TRAIT_ERA_EXTREME_THRESHOLD := 0.75
+const TRAIT_LONG_PEACE_YEARS := 20
+const TRAIT_LONG_PEACE_AGGRESSION := -0.02
+const TRAIT_LONG_PEACE_ECONOMY := 0.02
+
+# --- Unit System ---
+const WORKER_TRAIN_COST := 8
+const EXPLORER_TRAIN_COST := 12
+const STARTING_WORKERS := 1
+const STARTING_EXPLORERS := 1
+const STARTING_LEADERS := 1
+
+const UNIT_TYPE_NAMES := {
+	0: "Worker",
+	1: "Leader",
+	2: "Explorer",
+}
+
+const WORKER_NAME_POOL := [
+	"Artisan", "Mason", "Smith", "Carpenter", "Surveyor",
+	"Engineer", "Builder", "Foreman", "Craftsman", "Laborer",
+]
+
+const EXPLORER_NAME_POOL := [
+	"Scout", "Pathfinder", "Ranger", "Trailblazer", "Wayfinder",
+	"Pioneer", "Vanguard", "Navigator", "Outrider", "Tracker",
+]
+
+# --- Leader Traits ---
+# Each trait gives a civ-wide bonus. Player picks 2 at game start.
+const LEADER_TRAITS := {
+	0: {"name": "Builder", "bonus_type": "production", "bonus_value": 0.10},
+	1: {"name": "Conqueror", "bonus_type": "military", "bonus_value": 0.10},
+	2: {"name": "Diplomat", "bonus_type": "stability", "bonus_value": 5.0},
+	3: {"name": "Visionary", "bonus_type": "tech", "bonus_value": 0.15},
+	4: {"name": "Merchant", "bonus_type": "food", "bonus_value": 0.10},
+}
+
+# --- Society Traits ---
+# Modifies starting civ personality biases. Player picks 1 at game start.
+const SOCIETY_TRAITS := {
+	0: {"name": "Warlike", "expansion_mod": 0.0, "aggression_mod": 0.15, "diplomacy_mod": -0.10, "economy_mod": 0.0},
+	1: {"name": "Mercantile", "expansion_mod": 0.0, "aggression_mod": -0.10, "diplomacy_mod": 0.10, "economy_mod": 0.15},
+	2: {"name": "Expansionist", "expansion_mod": 0.15, "aggression_mod": 0.0, "diplomacy_mod": 0.0, "economy_mod": 0.0},
+	3: {"name": "Balanced", "expansion_mod": 0.0, "aggression_mod": 0.0, "diplomacy_mod": 0.0, "economy_mod": 0.0},
+	4: {"name": "Isolationist", "expansion_mod": -0.10, "aggression_mod": -0.10, "diplomacy_mod": -0.10, "economy_mod": 0.15},
+}
+
+
+# --- Era-Scaled Map Visual Parameters ---
+# Keys match Enums.Epoch values (0=PREHISTORIC, 1=CLASSICAL, 2=INDUSTRIAL, 3=FUTURE)
+const ERA_VISUAL_PARAMS := {
+	0: {  # PREHISTORIC -- rough parchment, hand-drawn feel
+		"border_width": 0.8,
+		"border_alpha": 0.25,
+		"civ_border_width": 2.0,
+		"border_style": "rough",
+		"fog_color": Color(0.24, 0.21, 0.15, 1.0),
+		"explored_modulate": Color(0.55, 0.52, 0.48, 1.0),
+		"tint_alpha": 0.14,
+		"noise_frequency_mult": 0.6,
+		"noise_contrast_mult": 0.5,
+		"deco_density": 0.5,
+		"label_font_size": 10,
+		"label_alpha": 0.6,
+	},
+	1: {  # CLASSICAL -- cleaner cartographic style
+		"border_width": 1.2,
+		"border_alpha": 0.35,
+		"civ_border_width": 3.0,
+		"border_style": "clean",
+		"fog_color": Color(0.20, 0.18, 0.14, 1.0),
+		"explored_modulate": Color(0.60, 0.58, 0.55, 1.0),
+		"tint_alpha": 0.18,
+		"noise_frequency_mult": 0.8,
+		"noise_contrast_mult": 0.8,
+		"deco_density": 0.8,
+		"label_font_size": 11,
+		"label_alpha": 0.8,
+	},
+	2: {  # INDUSTRIAL -- precise, detailed (current default look)
+		"border_width": 1.5,
+		"border_alpha": 0.45,
+		"civ_border_width": 3.5,
+		"border_style": "clean",
+		"fog_color": Color(0.18, 0.16, 0.13, 1.0),
+		"explored_modulate": Color(0.65, 0.65, 0.70, 1.0),
+		"tint_alpha": 0.18,
+		"noise_frequency_mult": 1.0,
+		"noise_contrast_mult": 1.0,
+		"deco_density": 1.0,
+		"label_font_size": 11,
+		"label_alpha": 1.0,
+	},
+	3: {  # FUTURE -- satellite/digital, sharp and vivid
+		"border_width": 1.8,
+		"border_alpha": 0.55,
+		"civ_border_width": 4.0,
+		"border_style": "glow",
+		"fog_color": Color(0.10, 0.12, 0.16, 1.0),
+		"explored_modulate": Color(0.72, 0.72, 0.78, 1.0),
+		"tint_alpha": 0.22,
+		"noise_frequency_mult": 1.5,
+		"noise_contrast_mult": 1.3,
+		"deco_density": 1.0,
+		"label_font_size": 12,
+		"label_alpha": 1.0,
+	},
+}

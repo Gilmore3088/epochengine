@@ -21,6 +21,14 @@ signal production_stockpile_changed(civ_id: int, amount: int)
 # --- Stability ---
 signal stability_changed(civ_id: int, old_value: float, new_value: float)
 signal civilization_collapsed(civ_id: int)
+signal legitimacy_changed(civ_id: int, old_value: float, new_value: float)
+
+# --- Politics ---
+signal succession_event(civ_id: int, event_id: int)
+signal election_held(civ_id: int, event_id: int)
+signal coup_attempted(civ_id: int, event_id: int)
+signal political_event_pending(event_data: Dictionary)
+signal political_events_resolved()
 
 # --- Territory ---
 signal region_owner_changed(region_id: int, old_owner: int, new_owner: int)
@@ -48,6 +56,11 @@ signal ai_decision_made(civ_id: int, decision_type: String, details: Dictionary)
 # --- Diplomacy ---
 signal alliance_formed(civ_a_id: int, civ_b_id: int)
 signal alliance_broken(civ_a_id: int, civ_b_id: int)
+signal nap_formed(civ_a_id: int, civ_b_id: int)
+signal nap_broken(civ_a_id: int, civ_b_id: int)
+signal trade_formed(civ_a_id: int, civ_b_id: int)
+signal trade_broken(civ_a_id: int, civ_b_id: int)
+signal tribute_demanded(demander_id: int, target_id: int, accepted: bool)
 
 # --- Economy ---
 signal food_shortage(civ_id: int, stockpile: int)
@@ -71,13 +84,28 @@ signal building_constructed(region_id: int, town_name: String, building_type: St
 signal workforce_preset_changed(region_id: int, town_name: String, preset_name: String)
 signal open_town_detail(region_id: int, town_index: int)
 
+# --- Disasters ---
+signal disaster_occurred(region_id: int, disaster_name: String, owner_id: int)
+
 # --- Strategy ---
 signal research_focus_changed(civ_id: int, focus_name: String)
 signal spending_priority_changed(civ_id: int, priority_name: String)
 
+# --- Trait Evolution ---
+signal trait_changed(civ_id: int, bias_name: String, old_tag: String, new_tag: String)
+
+# --- Tutorial ---
+signal tutorial_tip_requested(tip_data: Dictionary)
+signal tutorial_dismissed_all
+
 # --- Victory/Defeat ---
 signal game_won(victory_type: String, details: Dictionary)
 signal game_lost(reason: String, details: Dictionary)
+
+# --- Units ---
+signal unit_moved(unit_id: int, from_region: int, to_region: int)
+signal unit_created(unit_id: int, civ_id: int, unit_type: int, region_id: int)
+signal unit_trained(unit_id: int, civ_id: int, unit_type: int, region_id: int)
 
 # --- Visibility (Fog of War) ---
 signal region_explored(civ_id: int, region_id: int)

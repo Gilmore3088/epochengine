@@ -72,11 +72,21 @@ func _populate_menu(region: RegionData, player_civ: CivilizationData) -> void:
 	if region.owner_id == player_id:
 		# Player owns this region
 		if region.infrastructure_level < Constants.INFRASTRUCTURE_MAX_LEVEL:
-			var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * (region.infrastructure_level + 1)
-			var can_afford := player_civ.production_stockpile >= cost
-			add_item("Upgrade Infrastructure (-%d prod)" % cost, ITEM_UPGRADE_INFRA)
-			if not can_afford:
+			var next_level := region.infrastructure_level + 1
+			var next_name: String = Constants.INFRASTRUCTURE_NAMES.get(next_level, "Level %d" % next_level)
+			var required_tech: String = Constants.INFRASTRUCTURE_TECH_GATES.get(next_level, "")
+			var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * next_level
+			var has_worker := UnitSimulation.has_idle_worker_in_region(region.id, player_id)
+			if not has_worker:
+				add_item("Build %s (Needs Worker)" % next_name, ITEM_UPGRADE_INFRA)
 				set_item_disabled(item_count - 1, true)
+			elif required_tech != "" and not player_civ.technologies.has(required_tech):
+				add_item("Build %s (Requires %s)" % [next_name, required_tech], ITEM_UPGRADE_INFRA)
+				set_item_disabled(item_count - 1, true)
+			else:
+				add_item("Build %s (-%d prod)" % [next_name, cost], ITEM_UPGRADE_INFRA)
+				if player_civ.production_stockpile < cost:
+					set_item_disabled(item_count - 1, true)
 		if TownSimulation.can_found_town(region, player_civ):
 			var town_cost := TownSimulation.calculate_town_cost(region)
 			add_item("Found Town (-%d prod)" % town_cost, ITEM_FOUND_TOWN)

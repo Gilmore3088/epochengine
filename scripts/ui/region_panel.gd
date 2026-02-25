@@ -57,6 +57,7 @@ var header_hbox: HBoxContainer
 var divider: ColorRect
 var scale_down_btn: Button
 var scale_up_btn: Button
+var close_btn: Button
 
 # Drag state
 var _dragging: bool = false
@@ -154,6 +155,16 @@ func _build_ui() -> void:
 	scale_up_btn.pressed.connect(_on_scale_up)
 	scale_up_btn.mouse_filter = Control.MOUSE_FILTER_STOP
 	header_hbox.add_child(scale_up_btn)
+
+	# Close button
+	close_btn = Button.new()
+	close_btn.text = "X"
+	close_btn.custom_minimum_size = Vector2(26, 24)
+	UITheme.style_button(close_btn)
+	close_btn.add_theme_font_size_override("font_size", 11)
+	close_btn.pressed.connect(_close)
+	close_btn.mouse_filter = Control.MOUSE_FILTER_STOP
+	header_hbox.add_child(close_btn)
 
 	# -- Gold divider line under header --
 	divider = ColorRect.new()
@@ -472,6 +483,8 @@ func _connect_signals() -> void:
 	EventBus.region_deselected.connect(_close)
 	EventBus.turn_ended.connect(_on_turn_ended)
 	EventBus.region_owner_changed.connect(_on_region_owner_changed)
+	EventBus.infrastructure_upgraded.connect(_on_infrastructure_upgraded)
+	EventBus.building_constructed.connect(_on_building_constructed)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -521,7 +534,27 @@ func _update_display() -> void:
 		Enums.TerrainType.STEPPE: "Steppe",
 		Enums.TerrainType.VOLCANIC_RIDGE: "Volcanic Ridge",
 	}
-	terrain_label.text = terrain_names.get(region.terrain_type, "Unknown")
+	var terrain_text: String = terrain_names.get(region.terrain_type, "Unknown")
+	var geo_features: Array[String] = []
+	if region.has_river:
+		geo_features.append("River")
+	if region.has_lake:
+		geo_features.append("Lake")
+	if region.elevation >= 2:
+		geo_features.append("Elev %d" % region.elevation)
+	if not geo_features.is_empty():
+		terrain_text += " (%s)" % ", ".join(geo_features)
+	# Active disaster warning
+	if region.active_disaster >= 0:
+		var disaster_names := {
+			Enums.DisasterType.VOLCANIC_ERUPTION: "Eruption",
+			Enums.DisasterType.EARTHQUAKE: "Earthquake",
+			Enums.DisasterType.FLOOD: "Flood",
+			Enums.DisasterType.DROUGHT: "Drought",
+		}
+		var d_name: String = disaster_names.get(region.active_disaster, "Disaster")
+		terrain_text += " [%s %dyr]" % [d_name, region.disaster_years_remaining]
+	terrain_label.text = terrain_text
 
 	if region.owner_id >= 0:
 		var civ := GameState.get_civilization(region.owner_id)
@@ -533,7 +566,8 @@ func _update_display() -> void:
 	food_label.text = "%d" % region.food_yield
 	production_label.text = "%d" % region.production_yield
 	defense_label.text = "%.1fx" % region.defense_modifier
-	infrastructure_label.text = "%d / %d" % [region.infrastructure_level, Constants.INFRASTRUCTURE_MAX_LEVEL]
+	var infra_name: String = Constants.INFRASTRUCTURE_NAMES.get(region.infrastructure_level, "Unknown")
+	infrastructure_label.text = "%s (%d/%d)" % [infra_name, region.infrastructure_level, Constants.INFRASTRUCTURE_MAX_LEVEL]
 
 	# Supply efficiency
 	var supply_pct := region.supply_value * 100.0
@@ -567,10 +601,13 @@ func _update_display() -> void:
 	if Constants.RESOURCE_TERRAIN_YIELDS.has(terrain_key):
 		var terrain_yields: Dictionary = Constants.RESOURCE_TERRAIN_YIELDS[terrain_key]
 		for res_type in terrain_yields:
-			if ResourceProduction.is_resource_unlocked(res_type, current_era):
-				var yield_val: int = terrain_yields[res_type]
-				if yield_val > 0:
+			var yield_val: int = terrain_yields[res_type]
+			if yield_val > 0:
+				if ResourceProduction.is_resource_unlocked(res_type, current_era):
 					res_parts.append("%s: %d/yr" % [ResourceProduction.get_resource_name(res_type), yield_val])
+				else:
+					var era_name: String = Constants.ERA_NAMES.get(Constants.RESOURCE_ERA_UNLOCK.get(res_type, 1), "?")
+					res_parts.append("%s: Locked (%s era)" % [ResourceProduction.get_resource_name(res_type), era_name])
 
 	# Deposits (finite)
 	for res_type in region.resource_deposits:
@@ -616,9 +653,28 @@ func _update_display() -> void:
 		var can_upgrade := region.infrastructure_level < Constants.INFRASTRUCTURE_MAX_LEVEL
 		upgrade_btn.visible = can_upgrade
 		if can_upgrade:
-			var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * (region.infrastructure_level + 1)
-			upgrade_btn.text = "Upgrade Infrastructure (-%d prod)" % cost
-			upgrade_btn.disabled = player_civ.production_stockpile < cost
+			var next_level := region.infrastructure_level + 1
+			var next_name: String = Constants.INFRASTRUCTURE_NAMES.get(next_level, "Level %d" % next_level)
+			var required_tech: String = Constants.INFRASTRUCTURE_TECH_GATES.get(next_level, "")
+			var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * next_level
+			var has_worker := UnitSimulation.has_idle_worker_in_region(region.id, player_civ.id)
+			if not has_worker:
+				upgrade_btn.text = "Build %s (Needs Worker)" % next_name
+				upgrade_btn.tooltip_text = "Move a Worker unit to this region first"
+				upgrade_btn.disabled = true
+			elif required_tech != "" and not player_civ.technologies.has(required_tech):
+				upgrade_btn.text = "Build %s (Requires %s)" % [next_name, required_tech]
+				var hint := _get_tech_hint(player_civ, required_tech)
+				upgrade_btn.tooltip_text = hint
+				upgrade_btn.disabled = true
+			elif player_civ.production_stockpile < cost:
+				upgrade_btn.text = "Build %s (-%d prod)" % [next_name, cost]
+				upgrade_btn.tooltip_text = "Need %d production (have %d)" % [cost, player_civ.production_stockpile]
+				upgrade_btn.disabled = true
+			else:
+				upgrade_btn.text = "Build %s (-%d prod)" % [next_name, cost]
+				upgrade_btn.tooltip_text = "Upgrade infrastructure in this region"
+				upgrade_btn.disabled = false
 		# Found town button (in actions area, separate from towns_container)
 		if region.population >= Constants.TOWN_MIN_POP_TO_FOUND:
 			var town_cost := TownSimulation.calculate_town_cost(region)
@@ -736,6 +792,16 @@ func _on_region_owner_changed(region_id: int, _old: int, _new: int) -> void:
 		_update_display()
 
 
+func _on_infrastructure_upgraded(_civ_id: int, _region_name: String, _new_level: int) -> void:
+	if visible and current_region_id >= 0:
+		_update_display()
+
+
+func _on_building_constructed(_region_id: int, _town_name: String, _building_type: String) -> void:
+	if visible and current_region_id >= 0:
+		_update_display()
+
+
 func _close() -> void:
 	_slide_out()
 
@@ -763,6 +829,36 @@ func _slide_out() -> void:
 func _on_upgrade_pressed() -> void:
 	if current_region_id < 0:
 		return
+	var player_civ := GameState.get_player_civ()
+	var region := GameState.get_region(current_region_id)
+	if not player_civ or not region:
+		return
+
+	# Pre-validate all three gates with specific feedback
+	if not UnitSimulation.has_idle_worker_in_region(region.id, player_civ.id):
+		queued_label.text = "Needs Worker in this region!"
+		queued_label.add_theme_color_override("font_color", Color(0.9, 0.3, 0.2))
+		queued_label.visible = true
+		queued_timer = 3.0
+		return
+
+	var next_level := region.infrastructure_level + 1
+	var required_tech: String = Constants.INFRASTRUCTURE_TECH_GATES.get(next_level, "")
+	if required_tech != "" and not player_civ.technologies.has(required_tech):
+		queued_label.text = "Requires %s technology!" % required_tech
+		queued_label.add_theme_color_override("font_color", Color(0.9, 0.5, 0.2))
+		queued_label.visible = true
+		queued_timer = 3.0
+		return
+
+	var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * next_level
+	if player_civ.production_stockpile < cost:
+		queued_label.text = "Need %d production (have %d)" % [cost, player_civ.production_stockpile]
+		queued_label.add_theme_color_override("font_color", Color(0.9, 0.5, 0.2))
+		queued_label.visible = true
+		queued_timer = 3.0
+		return
+
 	PlayerActions.queue_action({
 		"type": "invest_infrastructure",
 		"region_id": current_region_id,
@@ -823,6 +919,20 @@ func _on_claim_pressed() -> void:
 	claim_btn.disabled = true
 
 
+func _get_tech_hint(civ: CivilizationData, tech_name: String) -> String:
+	## Build a tooltip showing what metrics are needed for a specific tech.
+	var proximity := TechEmergence.get_next_tech_proximity(civ)
+	for entry in proximity:
+		if entry["name"] == tech_name:
+			if entry["all_met"]:
+				return "%s: All thresholds met! Awaiting emergence." % tech_name
+			var parts: Array[String] = []
+			for g in entry["gaps"]:
+				parts.append("%s: %.0f/%.0f" % [g["metric"], g["current"], g["needed"]])
+			return "%s needs: %s" % [tech_name, ", ".join(parts)]
+	return "Discover %s through research" % tech_name
+
+
 func _is_adjacent_to_player(region: RegionData) -> bool:
 	var player_civ := GameState.get_player_civ()
 	if not player_civ:
@@ -835,6 +945,8 @@ func _is_adjacent_to_player(region: RegionData) -> bool:
 
 
 func _show_queued_feedback() -> void:
+	queued_label.text = "Queued! Press Next Year to execute."
+	queued_label.add_theme_color_override("font_color", UITheme.COLOR_FOOD)
 	queued_label.visible = true
 	queued_timer = 3.0
 
@@ -941,9 +1053,15 @@ func _update_towns_display(region: RegionData) -> void:
 			build_row.add_child(option)
 
 			var build_btn := Button.new()
-			build_btn.text = "Build"
 			UITheme.style_button(build_btn)
 			build_btn.add_theme_font_size_override("font_size", int(11 * ui_scale))
+			var has_worker := UnitSimulation.has_idle_worker_in_region(region.id, player_civ.id)
+			if not has_worker:
+				build_btn.text = "Needs Worker"
+				build_btn.tooltip_text = "Move a Worker unit to this region first"
+				build_btn.disabled = true
+			else:
+				build_btn.text = "Build"
 			build_btn.pressed.connect(
 				_on_construct_building_pressed.bind(region.id, i, option)
 			)
@@ -979,6 +1097,29 @@ func _on_found_town_pressed() -> void:
 
 func _on_construct_building_pressed(region_id: int, town_index: int, option: OptionButton) -> void:
 	var building_type: int = option.get_selected_id()
+	var player_civ := GameState.get_player_civ()
+	var region := GameState.get_region(region_id)
+	if not player_civ or not region:
+		return
+
+	# Pre-validate: check worker and cost
+	if not UnitSimulation.has_idle_worker_in_region(region_id, player_civ.id):
+		queued_label.text = "Needs Worker in this region!"
+		queued_label.add_theme_color_override("font_color", Color(0.9, 0.3, 0.2))
+		queued_label.visible = true
+		queued_timer = 3.0
+		return
+
+	var town: TownData = region.towns[town_index] if town_index < region.towns.size() else null
+	if town:
+		var cost := TownSimulation.calculate_building_cost(town, building_type)
+		if player_civ.production_stockpile < cost:
+			queued_label.text = "Need %d production (have %d)" % [cost, player_civ.production_stockpile]
+			queued_label.add_theme_color_override("font_color", Color(0.9, 0.5, 0.2))
+			queued_label.visible = true
+			queued_timer = 3.0
+			return
+
 	PlayerActions.queue_action({
 		"type": "construct_building",
 		"region_id": region_id,
@@ -992,7 +1133,7 @@ func _on_construct_building_pressed(region_id: int, town_index: int, option: Opt
 
 
 func _add_town_output_breakdown(parent: VBoxContainer, outputs: Dictionary) -> void:
-	var supply_pct := int(outputs["supply_efficiency"] * 100.0)
+	var supply_pct: int = int(float(outputs["supply_efficiency"]) * 100.0)
 	var supply_tag := "" if supply_pct >= 100 else " x%d%%" % supply_pct
 
 	# Food line
@@ -1144,8 +1285,8 @@ func _update_tier_progress(region: RegionData) -> void:
 		if req["met"]:
 			color = UITheme.COLOR_FOOD
 		else:
-			var need_f := float(req["need"])
-			var have_f := float(req["have"])
+			var need_f: float = float(req["need"])
+			var have_f: float = float(req["have"])
 			if need_f > 0 and have_f / need_f >= 0.80:
 				color = UITheme.GOLD
 			else:

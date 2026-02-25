@@ -38,10 +38,13 @@ func _reset_game_state() -> void:
 	GameState.regions.clear()
 	GameState.civilizations.clear()
 	GameState.heroes.clear()
+	GameState.units.clear()
 	GameState.current_year = 0
 	GameState.next_hero_id = 0
+	GameState.next_unit_id = 0
 	GameState.turn_log.clear()
 	GameState.load_game_data()
+	GameState.start_new_game()
 
 
 func _run_benchmark(run_idx: int) -> Dictionary:

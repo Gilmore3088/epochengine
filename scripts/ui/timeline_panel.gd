@@ -109,7 +109,7 @@ func _on_open_timeline() -> void:
 		_dismiss()
 		return
 	_refresh()
-	visible = true
+	PanelAnimator.open_panel(self)
 
 
 func _on_filter_pressed(category: String) -> void:
@@ -202,6 +202,10 @@ func _type_color(type: String) -> String:
 		"governance_change": return "#a8d"
 		"dev_tier_change": return "#a8d"
 		"alliance_formed": return "#8af"
+		"succession": return "#f8b"
+		"election": return "#8cf"
+		"coup": return "#f66"
+		"legitimacy_shift": return "#caa"
 		"shortage": return "#e85"
 		"infra_upgrade": return "#9ab"
 		"deposit_depleted": return "#e85"
@@ -224,6 +228,10 @@ func _type_prefix(type: String) -> String:
 		"governance_change": return "[GOV]"
 		"dev_tier_change": return "[DEV]"
 		"alliance_formed": return "[ALLIANCE]"
+		"succession": return "[SUCCESSION]"
+		"election": return "[ELECTION]"
+		"coup": return "[COUP]"
+		"legitimacy_shift": return "[LEGIT]"
 		"shortage": return "[SHORTAGE]"
 		"infra_upgrade": return "[INFRA]"
 		"deposit_depleted": return "[DEPLETED]"
@@ -232,7 +240,7 @@ func _type_prefix(type: String) -> String:
 
 
 func _dismiss() -> void:
-	visible = false
+	PanelAnimator.close_panel(self)
 
 
 func _unhandled_input(event: InputEvent) -> void:

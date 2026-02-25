@@ -19,6 +19,20 @@ extends Resource
 @export var governance_years: int = 0  # years spent in current tier
 @export var current_era: Enums.Epoch = Enums.Epoch.PREHISTORIC
 
+# Political state
+@export var legitimacy: float = Constants.LEGITIMACY_START
+@export var government_form: Enums.GovernmentForm = Enums.GovernmentForm.TRIBAL
+@export var succession_law: Enums.SuccessionLaw = Enums.SuccessionLaw.PRIMOGENITURE
+@export var dynasty_name: String = ""
+@export var ruler_name: String = ""
+@export var ruler_age: int = 30
+@export var ruler_lifespan: int = 70
+@export var heir_name: String = ""
+@export var heir_age: int = 12
+@export var years_since_election: int = 0
+@export var election_interval: int = Constants.DEFAULT_ELECTION_INTERVAL
+@export var power_blocs: Dictionary = {}
+
 # Golden age state
 @export var golden_age_years_remaining: int = 0
 @export var golden_age_cooldown: int = 0
@@ -36,11 +50,22 @@ extends Resource
 @export var diplomacy_bias: float = 0.5
 @export var economy_bias: float = 0.5
 
+# Trait evolution tracking
+@export var initial_expansion_bias: float = -1.0
+@export var initial_aggression_bias: float = -1.0
+@export var initial_diplomacy_bias: float = -1.0
+@export var initial_economy_bias: float = -1.0
+@export var years_at_peace: int = 0
+@export var cartography_skill: float = 0.0  # 0-1, grows per turn
+
 # War tracking
 @export var war_targets: Array[int] = []  # civ IDs at war with
 @export var war_durations: Dictionary = {}  # {civ_id: years_at_war}
 @export var peace_cooldowns: Dictionary = {}  # {civ_id: years_remaining}
 @export var alliance_partners: Array[int] = []  # civ IDs allied with
+@export var nap_partners: Dictionary = {}      # {civ_id: years_remaining}
+@export var trade_partners: Array[int] = []
+@export var tribute_cooldowns: Dictionary = {} # {civ_id: years_remaining}
 @export var consecutive_low_stability_years: int = 0
 
 # Discovered technologies
@@ -96,6 +121,32 @@ func hero_count() -> int:
 
 func can_spawn_hero() -> bool:
 	return hero_count() < Constants.HERO_MAX_PER_CIV
+
+
+func initialize_trait_tracking() -> void:
+	## Snapshot initial biases for "how much have I changed" display.
+	## Only sets if not already initialized (supports save/load).
+	if initial_expansion_bias < 0.0:
+		initial_expansion_bias = expansion_bias
+		initial_aggression_bias = aggression_bias
+		initial_diplomacy_bias = diplomacy_bias
+		initial_economy_bias = economy_bias
+
+
+func get_dominant_bias_name() -> String:
+	## Returns the field name of the highest bias.
+	var max_val := expansion_bias
+	var max_name := "expansion_bias"
+	if aggression_bias > max_val:
+		max_val = aggression_bias
+		max_name = "aggression_bias"
+	if diplomacy_bias > max_val:
+		max_val = diplomacy_bias
+		max_name = "diplomacy_bias"
+	if economy_bias > max_val:
+		max_val = economy_bias
+		max_name = "economy_bias"
+	return max_name
 
 
 func get_personality_tags() -> Array[String]:

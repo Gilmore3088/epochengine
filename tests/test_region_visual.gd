@@ -317,16 +317,19 @@ func test_terrain_texture_generator_deterministic() -> void:
 
 # --- Fog of War Rendering ---
 
-func test_hidden_region_gets_fog_color() -> void:
+func test_hidden_region_shows_muted_terrain_shape() -> void:
 	var visual := RegionVisual.new()
 	visual.region_data = _make_region(0)
 	visual.polygon = Polygon2D.new()
 	visual.tint_overlay = Polygon2D.new()
+	visual._local_points = PackedVector2Array([
+		Vector2(-10, -10), Vector2(10, -10), Vector2(10, 10), Vector2(-10, 10)
+	])
+	visual._current_era = 2  # Industrial
 	visual._render_hidden()
-	assert_eq(visual.polygon.color, RegionVisual.FOG_COLOR,
-		"Hidden region should render with FOG_COLOR")
-	assert_null(visual.polygon.texture,
-		"Hidden region should have null texture")
+	# Should use fog texture (not null) now
+	assert_not_null(visual.polygon.texture,
+		"Hidden region should have fog texture")
 	assert_false(visual.tint_overlay.visible,
 		"Hidden region should hide tint overlay")
 	visual.tint_overlay.free()
@@ -341,3 +344,100 @@ func test_explored_modulate_applied() -> void:
 	assert_true(mod.g < 1.0, "EXPLORED_MODULATE green should be less than 1.0")
 	assert_true(mod.r > 0.0, "EXPLORED_MODULATE red should be greater than 0.0")
 	assert_eq(mod.a, 1.0, "EXPLORED_MODULATE alpha should be 1.0")
+
+
+# --- Era-Aware Rendering ---
+
+func test_era_visual_params_all_eras_present() -> void:
+	for era in [0, 1, 2, 3]:
+		assert_true(Constants.ERA_VISUAL_PARAMS.has(era),
+			"ERA_VISUAL_PARAMS should have entry for era %d" % era)
+
+
+func test_era_visual_params_required_keys() -> void:
+	var required_keys := [
+		"border_width", "border_alpha", "civ_border_width", "border_style",
+		"fog_color", "explored_modulate", "tint_alpha",
+		"noise_frequency_mult", "noise_contrast_mult", "deco_density",
+		"label_font_size", "label_alpha",
+	]
+	for era in [0, 1, 2, 3]:
+		var params: Dictionary = Constants.ERA_VISUAL_PARAMS[era]
+		for key in required_keys:
+			assert_true(params.has(key),
+				"Era %d should have key '%s'" % [era, key])
+
+
+func test_era_fog_colors_differ() -> void:
+	var prehistoric_fog: Color = Constants.ERA_VISUAL_PARAMS[0]["fog_color"]
+	var future_fog: Color = Constants.ERA_VISUAL_PARAMS[3]["fog_color"]
+	assert_ne(prehistoric_fog, future_fog,
+		"Prehistoric and Future fog colors should differ")
+
+
+func test_era_texture_cache_keying() -> void:
+	TerrainTextureGenerator._cache.clear()
+	var tex_prehistoric := TerrainTextureGenerator.get_texture_for_era(1, 0)
+	var tex_industrial := TerrainTextureGenerator.get_texture_for_era(1, 2)
+	assert_not_null(tex_prehistoric, "Prehistoric texture should not be null")
+	assert_not_null(tex_industrial, "Industrial texture should not be null")
+	assert_ne(tex_prehistoric, tex_industrial,
+		"Different eras should produce different cached textures")
+
+
+func test_hidden_fog_color_per_era() -> void:
+	# Prehistoric and Future hidden renders should use different fog textures
+	var visual := RegionVisual.new()
+	visual.region_data = _make_region(0, Enums.TerrainType.PLAINS)
+	visual.polygon = Polygon2D.new()
+	visual.tint_overlay = Polygon2D.new()
+	visual._local_points = PackedVector2Array([
+		Vector2(-10, -10), Vector2(10, -10), Vector2(10, 10), Vector2(-10, 10)
+	])
+
+	visual._current_era = 0
+	visual._render_hidden()
+	var prehistoric_tex := visual.polygon.texture
+
+	visual._current_era = 3
+	visual._render_hidden()
+	var future_tex := visual.polygon.texture
+
+	assert_not_same(prehistoric_tex, future_tex,
+		"Hidden fog texture should differ between Prehistoric and Future eras")
+
+	visual.tint_overlay.free()
+	visual.polygon.free()
+	visual.free()
+
+
+func test_get_era_params_returns_dict() -> void:
+	var visual := RegionVisual.new()
+	visual.region_data = _make_region(0)
+	visual._current_era = 1
+	var params := visual._get_era_params()
+	assert_true(params is Dictionary, "Era params should be a Dictionary")
+	assert_true(params.has("fog_color"), "Params should contain fog_color")
+	visual.free()
+
+
+func test_get_era_params_fallback_to_industrial() -> void:
+	var visual := RegionVisual.new()
+	visual.region_data = _make_region(0)
+	visual._current_era = 99  # Invalid era
+	var params := visual._get_era_params()
+	var industrial := Constants.ERA_VISUAL_PARAMS[2]
+	assert_eq(params["fog_color"], industrial["fog_color"],
+		"Invalid era should fall back to Industrial (era 2)")
+	visual.free()
+
+
+func test_noise_frequency_scales_with_era() -> void:
+	# Prehistoric should have lower freq mult, Future higher
+	var prehistoric_freq: float = Constants.ERA_VISUAL_PARAMS[0]["noise_frequency_mult"]
+	var industrial_freq: float = Constants.ERA_VISUAL_PARAMS[2]["noise_frequency_mult"]
+	var future_freq: float = Constants.ERA_VISUAL_PARAMS[3]["noise_frequency_mult"]
+	assert_true(prehistoric_freq < industrial_freq,
+		"Prehistoric noise freq should be less than Industrial")
+	assert_true(future_freq > industrial_freq,
+		"Future noise freq should be greater than Industrial")

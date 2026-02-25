@@ -46,11 +46,11 @@ func _setup_two_civs() -> void:
 func test_toggle_opens_and_closes() -> void:
 	var panel := DiplomacyPanel.new()
 	add_child(panel)
-	assert_false(panel.visible, "Panel should start hidden")
+	assert_false(panel._is_open, "Panel should start closed")
 	panel.toggle()
-	assert_true(panel.visible, "Panel should be visible after toggle")
+	assert_true(panel._is_open, "Panel should be open after toggle")
 	panel.toggle()
-	assert_false(panel.visible, "Panel should be hidden after second toggle")
+	assert_false(panel._is_open, "Panel should be closed after second toggle")
 	panel.queue_free()
 
 

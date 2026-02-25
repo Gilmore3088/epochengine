@@ -141,12 +141,19 @@ static func _doctrine_modifier(civ: CivilizationData) -> float:
 static func _terrain_modifier(region: RegionData, is_attacker: bool) -> float:
 	## Defender gets terrain bonus + development tier bonus, attacker gets penalty.
 	## Larger regions (size_factor > 1) are harder to attack and easier to defend.
+	## Rivers penalize attackers (crossing penalty).
 	var size_mod := lerpf(1.0, region.size_factor, 0.3)  # 30% influence
 	var dev_defense := DevelopmentTierSimulation.get_defense_bonus(region.development_tier)
 	if is_attacker:
-		return 1.0 / (region.defense_modifier * size_mod)
+		var base := 1.0 / (region.defense_modifier * size_mod)
+		if region.has_river:
+			base += Constants.RIVER_DEFENSE_PENALTY  # Negative = harder for attacker
+		return base
 	else:
-		return (region.defense_modifier + dev_defense) * size_mod
+		var base := (region.defense_modifier + dev_defense) * size_mod
+		if region.has_lake:
+			base += Constants.LAKE_DEFENSE_BONUS
+		return base
 
 
 static func _supply_modifier(civ: CivilizationData, region: RegionData) -> float:

@@ -10,6 +10,7 @@ var events_container: VBoxContainer
 var stability_delta_label: Label
 var _prev_stability: float = -1.0
 var _prev_territories: int = -1
+var _deferred: bool = false
 
 
 func _ready() -> void:
@@ -19,6 +20,7 @@ func _ready() -> void:
 	gui_input.connect(_on_gui_input)
 	EventBus.turn_started.connect(_on_turn_started)
 	EventBus.turn_ended.connect(_on_turn_ended)
+	EventBus.political_events_resolved.connect(_on_political_events_resolved)
 
 
 func _build_ui() -> void:
@@ -76,8 +78,17 @@ func _on_turn_ended(_year: int) -> void:
 	var hud := _get_hud()
 	if hud and (hud.is_fast_forwarding or hud.is_auto_playing):
 		return
+	if not GameState.pending_political_events.is_empty():
+		_deferred = true
+		return
 
 	_populate_and_show()
+
+
+func _on_political_events_resolved() -> void:
+	if _deferred:
+		_deferred = false
+		_populate_and_show()
 
 
 func _populate_and_show() -> void:
@@ -108,8 +119,8 @@ func _populate_and_show() -> void:
 			lbl.add_theme_font_override("bold_font", UITheme.get_body_bold_font())
 			lbl.add_theme_font_size_override("normal_font_size", 13)
 
-			var color := _type_color(event.get("type", ""))
-			var prefix := _type_prefix(event.get("type", ""))
+			var color: Color = _type_color(event.get("type", ""))
+			var prefix: String = _type_prefix(event.get("type", ""))
 			var desc: String = event.get("description", "")
 			var severity: int = event.get("severity", 1)
 
@@ -216,6 +227,17 @@ func _type_color(type: String) -> String:
 		"governance_change": return "#a8d"
 		"dev_tier_change": return "#a8d"
 		"alliance_formed": return "#8af"
+		"alliance_broken": return "#da8"
+		"nap_formed": return "#8af"
+		"nap_broken": return "#8af"
+		"trade_formed": return "#8c8"
+		"trade_broken": return "#8c8"
+		"tribute_demanded": return "#e85"
+		"succession": return "#f8b"
+		"election": return "#8cf"
+		"coup": return "#f66"
+		"legitimacy_shift": return "#caa"
+		"trait_changed": return "#c8a"
 		_: return "#aaa"
 
 
@@ -247,6 +269,17 @@ func _type_prefix(type: String) -> String:
 		"governance_change": return "[GOV]"
 		"dev_tier_change": return "[DEV]"
 		"alliance_formed": return "[ALLIANCE]"
+		"alliance_broken": return "[ALLIANCE]"
+		"nap_formed": return "[NAP]"
+		"nap_broken": return "[NAP]"
+		"trade_formed": return "[TRADE]"
+		"trade_broken": return "[TRADE]"
+		"tribute_demanded": return "[TRIBUTE]"
 		"shortage": return "[SHORTAGE]"
 		"infra_upgrade": return "[INFRA]"
+		"succession": return "[SUCCESSION]"
+		"election": return "[ELECTION]"
+		"coup": return "[COUP]"
+		"legitimacy_shift": return "[LEGIT]"
+		"trait_changed": return "[TRAIT]"
 		_: return ""

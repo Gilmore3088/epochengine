@@ -49,6 +49,24 @@ static func process_queued_actions(civ: CivilizationData) -> Array[Dictionary]:
 				events.append_array(_execute_set_spending_priority(civ, action))
 			"claim_region":
 				events.append_array(_execute_claim_region(civ, action))
+			"seek_nap":
+				events.append_array(_execute_seek_nap(civ, action))
+			"seek_trade":
+				events.append_array(_execute_seek_trade(civ, action))
+			"demand_tribute":
+				events.append_array(_execute_demand_tribute(civ, action))
+			"move_unit":
+				events.append_array(_execute_move_unit(civ, action))
+			"train_unit":
+				events.append_array(_execute_train_unit(civ, action))
+			"explorer_claim":
+				events.append_array(_execute_explorer_claim(civ, action))
+			"terraform":
+				events.append_array(_execute_terraform(civ, action))
+			"reclaim_land":
+				events.append_array(_execute_reclaim_land(civ, action))
+			"space_launch":
+				events.append_array(_execute_space_launch(civ, action))
 	_action_queue.clear()
 	return events
 
@@ -65,6 +83,17 @@ static func _execute_declare_war(
 	if civ.alliance_partners.has(target_id):
 		civ.alliance_partners.erase(target_id)
 		target.alliance_partners.erase(civ.id)
+
+	# Break NAP if active (stability penalty for breaking pact)
+	if civ.nap_partners.has(target_id):
+		civ.nap_partners.erase(target_id)
+		target.nap_partners.erase(civ.id)
+		civ.stability = maxf(civ.stability - Constants.NAP_BREAK_STABILITY_PENALTY, Constants.STABILITY_MIN)
+
+	# Break trade if active
+	if civ.trade_partners.has(target_id):
+		civ.trade_partners.erase(target_id)
+		target.trade_partners.erase(civ.id)
 
 	civ.war_targets.append(target_id)
 	target.war_targets.append(civ.id)
@@ -136,6 +165,7 @@ static func _execute_invest_infrastructure(
 		"region_id": region.id,
 		"region_name": region.region_name,
 		"new_level": region.infrastructure_level,
+		"infra_name": Constants.INFRASTRUCTURE_NAMES.get(region.infrastructure_level, "Level %d" % region.infrastructure_level),
 		"food_delta": food_delta,
 		"prod_delta": prod_delta,
 		"def_delta": def_delta,
@@ -331,6 +361,7 @@ static func _execute_claim_region(
 	if not source_region:
 		return []
 
+	var old_owner := region.owner_id
 	var cost := EconomySimulation.pay_expansion_cost(civ, region_count, source_region)
 	region.owner_id = civ.id
 	region.population = maxi(region.population, Constants.EXPANSION_SETTLER_POP)
@@ -344,6 +375,243 @@ static func _execute_claim_region(
 		"civ_name": civ.civ_name,
 		"region_id": region.id,
 		"region_name": region.region_name,
+		"old_owner": old_owner,
 		"source_region_name": source_region.region_name,
 		"cost": cost,
 	}]
+
+
+static func _execute_seek_nap(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var target_id: int = action.get("target_civ_id", -1)
+	var target := GameState.get_civilization(target_id)
+	if not target or target.is_collapsed:
+		return []
+	if civ.war_targets.has(target_id):
+		return []
+	if civ.nap_partners.has(target_id):
+		return []
+	if civ.alliance_partners.has(target_id):
+		return []
+
+	civ.nap_partners[target_id] = Constants.NAP_DURATION
+	target.nap_partners[civ.id] = Constants.NAP_DURATION
+
+	return [{
+		"type": "nap_formed",
+		"civ_a_id": civ.id,
+		"civ_b_id": target_id,
+		"civ_a_name": civ.civ_name,
+		"civ_b_name": target.civ_name,
+	}]
+
+
+static func _execute_seek_trade(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var target_id: int = action.get("target_civ_id", -1)
+	var target := GameState.get_civilization(target_id)
+	if not target or target.is_collapsed:
+		return []
+	if civ.war_targets.has(target_id):
+		return []
+	if civ.trade_partners.has(target_id):
+		return []
+
+	civ.trade_partners.append(target_id)
+	target.trade_partners.append(civ.id)
+
+	return [{
+		"type": "trade_formed",
+		"civ_a_id": civ.id,
+		"civ_b_id": target_id,
+		"civ_a_name": civ.civ_name,
+		"civ_b_name": target.civ_name,
+	}]
+
+
+static func _execute_demand_tribute(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var target_id: int = action.get("target_civ_id", -1)
+	var target := GameState.get_civilization(target_id)
+	if not target or target.is_collapsed:
+		return []
+
+	# Must be significantly stronger
+	if target.military_strength <= 0 or civ.military_strength / target.military_strength < Constants.TRIBUTE_STRENGTH_RATIO:
+		return []
+
+	# Cooldown check
+	if civ.tribute_cooldowns.has(target_id) and civ.tribute_cooldowns[target_id] > 0:
+		return []
+
+	# AI response: acceptance chance based on target diplomacy
+	var accept_chance := 0.3 + target.diplomacy_bias * 0.3
+	var accepted := GameState.sim_rng.randf() < accept_chance
+
+	var events: Array[Dictionary] = []
+
+	if accepted:
+		var amount := mini(Constants.TRIBUTE_PRODUCTION_AMOUNT, target.production_stockpile)
+		target.production_stockpile -= amount
+		civ.production_stockpile += amount
+		civ.tribute_cooldowns[target_id] = Constants.TRIBUTE_COOLDOWN_YEARS
+	else:
+		civ.tribute_cooldowns[target_id] = Constants.TRIBUTE_COOLDOWN_YEARS
+		# Chance of war on refusal
+		if GameState.sim_rng.randf() < Constants.TRIBUTE_REFUSAL_WAR_CHANCE * civ.aggression_bias:
+			if not civ.war_targets.has(target_id):
+				civ.war_targets.append(target_id)
+				target.war_targets.append(civ.id)
+				civ.war_durations[target_id] = 0
+				target.war_durations[civ.id] = 0
+				events.append({
+					"type": "war_declared",
+					"attacker_id": civ.id,
+					"defender_id": target_id,
+					"attacker_name": civ.civ_name,
+					"defender_name": target.civ_name,
+				})
+
+	events.insert(0, {
+		"type": "tribute_demanded",
+		"demander_id": civ.id,
+		"target_id": target_id,
+		"demander_name": civ.civ_name,
+		"target_name": target.civ_name,
+		"accepted": accepted,
+	})
+
+	return events
+
+
+static func _execute_move_unit(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	## Queue a unit move. The actual move happens in UnitSimulation.process_unit_movement().
+	var unit_id: int = action.get("unit_id", -1)
+	var target_region_id: int = action.get("target_region_id", -1)
+	var unit := GameState.get_unit(unit_id)
+	if not unit or unit.owner_civ_id != civ.id:
+		return []
+
+	var current_region := GameState.get_region(unit.region_id)
+	if not current_region:
+		return []
+	if target_region_id not in current_region.adjacency_list:
+		return []
+
+	unit.target_region_id = target_region_id
+	unit.turns_in_transit = 0
+	return []
+
+
+static func _execute_train_unit(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var unit_type: int = action.get("unit_type", 0)
+	var region_id: int = action.get("region_id", -1)
+
+	var unit := UnitSimulation.train_unit(unit_type, region_id, civ.id)
+	if not unit:
+		return []
+
+	return [{
+		"type": "unit_trained",
+		"unit_id": unit.id,
+		"unit_name": unit.unit_name,
+		"unit_type": unit_type,
+		"civ_id": civ.id,
+		"civ_name": civ.civ_name,
+		"region_id": region_id,
+		"region_name": GameState.get_region(region_id).region_name if GameState.get_region(region_id) else "",
+	}]
+
+
+static func _execute_explorer_claim(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	## Claim a neutral region using an explorer. Explorer must be in an adjacent owned region.
+	var region_id: int = action.get("region_id", -1)
+	var explorer_id: int = action.get("explorer_id", -1)
+	var region := GameState.get_region(region_id)
+	if not region or not region.is_neutral():
+		return []
+
+	var explorer := GameState.get_unit(explorer_id)
+	if not explorer or explorer.owner_civ_id != civ.id or not explorer.is_explorer():
+		return []
+	if not explorer.is_idle():
+		return []
+
+	# Explorer must be in an owned region adjacent to the target
+	var explorer_region := GameState.get_region(explorer.region_id)
+	if not explorer_region or explorer_region.owner_id != civ.id:
+		return []
+	if region_id not in explorer_region.adjacency_list:
+		return []
+
+	# Check expansion cost
+	var owned := GameState.get_regions_by_owner(civ.id)
+	var region_count := owned.size()
+	if not EconomySimulation.can_afford_expansion(civ, region_count):
+		return []
+
+	var old_owner := region.owner_id
+	var cost := EconomySimulation.pay_expansion_cost(civ, region_count, explorer_region)
+	region.owner_id = civ.id
+	region.population = maxi(region.population, Constants.EXPANSION_SETTLER_POP)
+
+	# Move explorer into claimed region
+	explorer.region_id = region_id
+
+	# Refresh visibility
+	GameState.update_visibility(civ.id)
+
+	return [{
+		"type": "expansion",
+		"civ_id": civ.id,
+		"civ_name": civ.civ_name,
+		"region_id": region.id,
+		"region_name": region.region_name,
+		"old_owner": old_owner,
+		"source_region_name": explorer_region.region_name,
+		"cost": cost,
+	}]
+
+
+static func _execute_terraform(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var region_id: int = action.get("region_id", -1)
+	var target_terrain: int = action.get("target_terrain", -1)
+	var region := GameState.get_region(region_id)
+	if not region:
+		return []
+	if not FutureSimulation.start_terraform(civ, region, target_terrain):
+		return []
+	return [{"type": "terraform_started", "civ_id": civ.id,
+		"region_name": region.region_name, "target_terrain": target_terrain}]
+
+
+static func _execute_reclaim_land(
+	civ: CivilizationData, action: Dictionary
+) -> Array[Dictionary]:
+	var region_id: int = action.get("region_id", -1)
+	var region := GameState.get_region(region_id)
+	if not region:
+		return []
+	if not FutureSimulation.start_reclamation(civ, region):
+		return []
+	return [{"type": "reclamation_started", "civ_id": civ.id,
+		"region_name": region.region_name}]
+
+
+static func _execute_space_launch(
+	civ: CivilizationData, _action: Dictionary
+) -> Array[Dictionary]:
+	if not FutureSimulation.launch_space_program(civ):
+		return []
+	return [{"type": "space_launched", "civ_id": civ.id, "civ_name": civ.civ_name}]

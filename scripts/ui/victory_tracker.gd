@@ -118,7 +118,7 @@ func _update() -> void:
 
 	# Federation
 	var fed: Dictionary = progress["federation"]
-	var gov_name := _governance_name(fed["governance_tier"])
+	var gov_name: String = _governance_name(int(fed["governance_tier"]))
 	_labels["federation"].text = "Federation: %s | Allies: %d/%d" % [gov_name, fed["allies"], fed["target_allies"]]
 	_bars["federation"].value = fed["pct"]
 	_color_bar("federation", fed["pct"])

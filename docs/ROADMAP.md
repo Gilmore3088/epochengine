@@ -6,19 +6,21 @@
 - Player decision surface: research focus, spending priorities, town management, expansion, diplomacy
 - Fog of war with 3-state visibility model
 - 116 handcrafted regions, 3 civs, Voronoi tessellation map
-- 404 GUT tests, 1345 assertions, 21 test suites
+- Trait evolution engine (personality biases evolve based on events)
+- Tutorial/onboarding system (15 contextual tips, hotkey bar)
+- 442 GUT tests, 1485 assertions, 23 test suites
 
 ---
 
 ## Short-Term Goals (V0.1 Polish)
-- Balance pass: address survival regression (avg 1.2 civs at Y500, target 1.5+)
+- ~~Balance pass: address survival regression~~ **DONE** (avg 1.6 civs at Y500, 12/20 runs with 2+ survivors, 23 constants tuned across 7 iterations)
 - Manual playtesting and bug fixing
-- Performance verification (currently avg 1.5s per 500yr run)
+- ~~Performance verification~~ **DONE** (avg 1.4s per 500yr run, peak 54ms)
 
 ## Mid-Term Goals (V0.2)
-- Trait/ideology engine
+- ~~Trait/ideology engine~~ **DONE** (TraitSimulation: event-driven bias evolution, annual drift, hero influence, CivProfile bars, toasts)
 - War visualization / front goals
-- Tutorial/onboarding tooltips
+- ~~Tutorial/onboarding tooltips~~ **DONE** (TutorialManager: 15 event-driven tips, TutorialOverlay, HotkeyBar, save/load)
 - Diplomacy depth (trade, non-aggression pacts)
 
 ## Long-Term Goals (V0.3+)

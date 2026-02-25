@@ -67,6 +67,8 @@ static func calculate_town_cost(region: RegionData) -> int:
 static func can_construct_building(
 	town: TownData, building_type: int, civ: CivilizationData
 ) -> bool:
+	if not UnitSimulation.has_idle_worker_in_region(town.region_id, civ.id):
+		return false
 	var cost := calculate_building_cost(town, building_type)
 	return civ.production_stockpile >= cost
 
@@ -255,7 +257,9 @@ static func compute_town_hints(town: TownData, region: RegionData, civ: Civiliza
 	if next_tier < Constants.DEV_TIER_GATES.size():
 		var gate: Array = Constants.DEV_TIER_GATES[next_tier]
 		if region.infrastructure_level < gate[0]:
-			hints.append("Region needs Infra %d for next tier (have %d)" % [gate[0], region.infrastructure_level])
+			var needed_name: String = Constants.INFRASTRUCTURE_NAMES.get(gate[0], "Level %d" % gate[0])
+			var current_name: String = Constants.INFRASTRUCTURE_NAMES.get(region.infrastructure_level, "Level %d" % region.infrastructure_level)
+			hints.append("Region needs %s for next tier (have %s)" % [needed_name, current_name])
 	return hints
 
 

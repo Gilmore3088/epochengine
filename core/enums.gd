@@ -63,6 +63,19 @@ enum GovernanceTier {
 	FEDERATION,    # 26+ regions
 }
 
+enum GovernmentForm {
+	TRIBAL,
+	MONARCHY,
+	AUTOCRACY,
+	REPUBLIC,
+}
+
+enum SuccessionLaw {
+	PRIMOGENITURE,
+	ELECTIVE,
+	MERITOCRATIC,
+}
+
 enum Epoch {
 	PREHISTORIC,  # 0-2 technologies
 	CLASSICAL,    # 3-5 technologies
@@ -99,6 +112,12 @@ enum MapOverlay {
 	POLITICAL,
 }
 
+enum MapSize {
+	SMALL,
+	MEDIUM,
+	LARGE,
+}
+
 enum BuildingType {
 	GRANARY,
 	BARRACKS,
@@ -114,4 +133,25 @@ enum VisibilityState {
 	HIDDEN,     # Unknown territory - dark fog
 	EXPLORED,   # Previously visible - terrain known, stale data
 	VISIBLE,    # Currently adjacent to owned territory - full detail
+}
+
+enum UnitType {
+	WORKER,
+	LEADER,
+	EXPLORER,
+}
+
+enum DisasterType {
+	VOLCANIC_ERUPTION,
+	EARTHQUAKE,
+	FLOOD,
+	DROUGHT,
+}
+
+enum GovernorFocus {
+	GROWTH,
+	MILITARY,
+	TRADE,
+	KNOWLEDGE,
+	INFRASTRUCTURE,
 }

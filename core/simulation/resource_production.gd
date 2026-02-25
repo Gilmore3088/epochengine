@@ -35,7 +35,7 @@ static func process_resources(
 		var res_type: int = penalty_info["resource"]
 		var eff_loss: float = penalty_info["efficiency_loss"]
 		if eff_loss > 0.0 and yields.has(res_type):
-			var reduction := int(float(yields[res_type]) * eff_loss)
+			var reduction: int = int(float(yields[res_type]) * eff_loss)
 			civ.resource_stockpiles[res_type] = maxi(
 				civ.resource_stockpiles.get(res_type, 0) - reduction, 0
 			)

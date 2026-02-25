@@ -47,7 +47,7 @@ func _on_open(civ_id: int) -> void:
 		return
 	_civ_id = civ_id
 	_rebuild()
-	visible = true
+	PanelAnimator.open_panel(self)
 
 
 func _rebuild() -> void:
@@ -72,6 +72,8 @@ func _rebuild() -> void:
 	_add_sep()
 	_build_stability_section(civ, regions)
 	_add_sep()
+	_build_legitimacy_section(civ)
+	_add_sep()
 	_build_insights(civ, regions, econ, admin_cap)
 
 	# Hidden metrics + tech proximity (player civ only)
@@ -80,6 +82,9 @@ func _rebuild() -> void:
 		_build_tech_proximity(civ)
 		_add_sep()
 		_build_discoveries(civ)
+
+	_add_sep()
+	_build_personality(civ)
 
 	var has_diplo: bool = (
 		not civ.war_targets.is_empty()
@@ -311,6 +316,7 @@ func _build_stat_cards(civ: CivilizationData, econ: Dictionary) -> void:
 	_content.add_child(row)
 
 	_add_card(row, "Stability", "%.0f%%" % civ.stability, _stability_color(civ.stability))
+	_add_card(row, "Legitimacy", "%.0f%%" % civ.legitimacy, UITheme.GOLD_DIM)
 	_add_card(row, "Population", _fmt_pop(civ.total_population), UITheme.PARCHMENT)
 	_add_card(row, "Military", "%.0f" % civ.military_strength, UITheme.COLOR_MILITARY)
 
@@ -434,6 +440,44 @@ func _build_trend_chart() -> void:
 		var bar := ColorRect.new()
 		bar.custom_minimum_size = Vector2(0, bar_h)
 		bar.color = _stability_color(v)
+		col.add_child(bar)
+
+
+func _build_legitimacy_section(civ: CivilizationData) -> void:
+	var lbl := Label.new()
+	lbl.text = "Legitimacy"
+	UITheme.style_label_header(lbl, 16)
+	_content.add_child(lbl)
+
+	var trend := History.get_legitimacy_trend(_civ_id, 20)
+	if trend.is_empty():
+		var no_data := Label.new()
+		no_data.text = "No legitimacy data yet"
+		UITheme.style_label_body(no_data, 12, UITheme.PARCHMENT_DIM)
+		_content.add_child(no_data)
+		return
+
+	var chart := HBoxContainer.new()
+	chart.add_theme_constant_override("separation", 2)
+	chart.custom_minimum_size = Vector2(0, 36)
+	_content.add_child(chart)
+
+	for entry in trend:
+		var v: float = entry.get("value", 50.0)
+		var bar_h: float = maxf(v / 100.0 * 32.0, 2.0)
+
+		var col := VBoxContainer.new()
+		col.custom_minimum_size = Vector2(0, 36)
+		col.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		chart.add_child(col)
+
+		var spacer := Control.new()
+		spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+		col.add_child(spacer)
+
+		var bar := ColorRect.new()
+		bar.custom_minimum_size = Vector2(0, bar_h)
+		bar.color = _legitimacy_color(v)
 		col.add_child(bar)
 
 
@@ -583,13 +627,14 @@ func _build_tech_proximity(civ: CivilizationData) -> void:
 		if shown >= 3:
 			break
 		var gaps: Array = entry["gaps"]
+		var tech_name: String = entry["name"]
 		if entry["all_met"]:
-			_add_insight_line(hint_box, "??? — Thresholds met, awaiting emergence", Color(0.45, 0.78, 0.42))
+			_add_insight_line(hint_box, "%s — Thresholds met, awaiting emergence" % tech_name, Color(0.45, 0.78, 0.42))
 		elif gaps.size() <= 2:
 			var gap_parts: Array[String] = []
 			for g in gaps:
 				gap_parts.append("%s: %.0f/%.0f" % [g["metric"], g["current"], g["needed"]])
-			_add_insight_line(hint_box, "??? — Need: %s" % ", ".join(gap_parts), Color(0.82, 0.72, 0.28))
+			_add_insight_line(hint_box, "%s — Need: %s" % [tech_name, ", ".join(gap_parts)], Color(0.82, 0.72, 0.28))
 		else:
 			continue
 		shown += 1
@@ -629,6 +674,12 @@ func _build_discoveries(civ: CivilizationData) -> void:
 	grid.add_theme_constant_override("separation", 2)
 	_content.add_child(grid)
 
+	var proximity := TechEmergence.get_next_tech_proximity(civ)
+	var close_techs: Dictionary = {}
+	for entry in proximity:
+		if entry["gaps"].size() <= 2:
+			close_techs[entry["name"]] = entry["gaps"].size()
+
 	for tech in TechEmergence.TECH_TABLE:
 		var tech_name: String = tech["name"]
 		var discovered := civ.technologies.has(tech_name)
@@ -636,6 +687,9 @@ func _build_discoveries(civ: CivilizationData) -> void:
 		if discovered:
 			lbl.text = "  %s" % tech_name
 			UITheme.style_label_body(lbl, 12, Color(0.6, 0.85, 0.5))
+		elif close_techs.has(tech_name):
+			lbl.text = "  %s (researching...)" % tech_name
+			UITheme.style_label_body(lbl, 12, Color(0.72, 0.62, 0.28))
 		else:
 			lbl.text = "  ???"
 			UITheme.style_label_body(lbl, 12, Color(0.4, 0.38, 0.35))
@@ -662,6 +716,99 @@ func _metric_color(value: float, metric_key: String, proximity: Array[Dictionary
 	if not any_need and not proximity.is_empty():
 		return Color(0.45, 0.78, 0.42)  # green — all thresholds met for this metric
 	return UITheme.PARCHMENT_DIM  # gray — far
+
+
+func _build_personality(civ: CivilizationData) -> void:
+	var lbl := Label.new()
+	lbl.text = "Personality"
+	UITheme.style_label_header(lbl, 16)
+	_content.add_child(lbl)
+
+	var bias_data := [
+		{"name": "Expansion", "field": "expansion_bias", "initial": civ.initial_expansion_bias, "value": civ.expansion_bias},
+		{"name": "Aggression", "field": "aggression_bias", "initial": civ.initial_aggression_bias, "value": civ.aggression_bias},
+		{"name": "Diplomacy", "field": "diplomacy_bias", "initial": civ.initial_diplomacy_bias, "value": civ.diplomacy_bias},
+		{"name": "Economy", "field": "economy_bias", "initial": civ.initial_economy_bias, "value": civ.economy_bias},
+	]
+
+	var grid := VBoxContainer.new()
+	grid.add_theme_constant_override("separation", 4)
+	_content.add_child(grid)
+
+	for bd in bias_data:
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+		grid.add_child(row)
+
+		# Label
+		var name_lbl := Label.new()
+		name_lbl.text = bd["name"]
+		name_lbl.custom_minimum_size = Vector2(80, 0)
+		UITheme.style_label_body(name_lbl, 12, UITheme.PARCHMENT)
+		row.add_child(name_lbl)
+
+		# Progress bar
+		var bar := ProgressBar.new()
+		bar.min_value = 0.0
+		bar.max_value = 1.0
+		bar.value = bd["value"]
+		bar.show_percentage = false
+		bar.custom_minimum_size = Vector2(140, 14)
+		bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+		var bar_color: Color
+		var val: float = bd["value"]
+		if val >= 0.6:
+			bar_color = Color(0.82, 0.72, 0.28)  # gold
+		elif val <= 0.3:
+			bar_color = Color(0.45, 0.55, 0.78)  # blue
+		else:
+			bar_color = Color(0.55, 0.52, 0.48)  # gray
+
+		var fill_style := StyleBoxFlat.new()
+		fill_style.bg_color = bar_color
+		fill_style.corner_radius_top_left = 2
+		fill_style.corner_radius_top_right = 2
+		fill_style.corner_radius_bottom_left = 2
+		fill_style.corner_radius_bottom_right = 2
+		bar.add_theme_stylebox_override("fill", fill_style)
+
+		var bg_style := StyleBoxFlat.new()
+		bg_style.bg_color = Color(0.12, 0.11, 0.14, 0.6)
+		bg_style.corner_radius_top_left = 2
+		bg_style.corner_radius_top_right = 2
+		bg_style.corner_radius_bottom_left = 2
+		bg_style.corner_radius_bottom_right = 2
+		bar.add_theme_stylebox_override("background", bg_style)
+
+		row.add_child(bar)
+
+		# Value label
+		var val_lbl := Label.new()
+		val_lbl.text = "%.2f" % val
+		val_lbl.custom_minimum_size = Vector2(36, 0)
+		val_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		UITheme.style_label_body(val_lbl, 12, bar_color)
+		row.add_child(val_lbl)
+
+		# Delta from initial
+		var initial: float = bd["initial"]
+		if initial >= 0.0:
+			var delta: float = val - initial
+			if absf(delta) > 0.005:
+				var delta_lbl := Label.new()
+				var delta_color: Color = Color(0.45, 0.78, 0.42) if delta > 0 else Color(0.82, 0.32, 0.30)
+				delta_lbl.text = "%+.2f" % delta
+				delta_lbl.custom_minimum_size = Vector2(40, 0)
+				delta_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				UITheme.style_label_body(delta_lbl, 11, delta_color)
+				row.add_child(delta_lbl)
+
+		# Tooltip
+		var tip := "%s: %.2f" % [bd["name"], val]
+		if initial >= 0.0:
+			tip += " (started at %.2f, %+.2f)" % [initial, val - initial]
+		row.tooltip_text = tip
 
 
 func _build_diplomacy(civ: CivilizationData) -> void:
@@ -800,6 +947,14 @@ func _stability_color(value: float) -> Color:
 	return Color(0.82, 0.32, 0.30)
 
 
+func _legitimacy_color(value: float) -> Color:
+	if value >= 70.0:
+		return Color(0.72, 0.64, 0.36)
+	elif value >= 40.0:
+		return Color(0.82, 0.72, 0.28)
+	return Color(0.82, 0.32, 0.30)
+
+
 func _stability_mood_color(stability: float) -> Color:
 	if stability >= 70.0:
 		return Color(0.12, 0.18, 0.10, 0.5)
@@ -817,7 +972,7 @@ func _fmt_pop(n: int) -> String:
 
 
 func _dismiss() -> void:
-	visible = false
+	PanelAnimator.close_panel(self)
 
 
 func _unhandled_input(event: InputEvent) -> void:

@@ -7,6 +7,7 @@ var game_speed: Enums.GameSpeed = Enums.GameSpeed.NORMAL
 var is_running: bool = false
 var current_overlay: int = Enums.MapOverlay.POLITICAL
 var player_civ_id: int = 0
+var map_config: MapConfig = MapConfig.new()
 
 # Seeded RNG for deterministic simulation. All simulation randomness goes through this.
 var sim_rng := RandomNumberGenerator.new()
@@ -16,10 +17,17 @@ var sim_seed: int = 0
 var regions: Dictionary = {}         # {int: RegionData}
 var civilizations: Dictionary = {}   # {int: CivilizationData}
 var heroes: Dictionary = {}          # {int: HeroData}
+var units: Dictionary = {}           # {int: UnitData}
+var region_hex_coords: Dictionary = {}  # {int: Vector2i}
+var land_hex_coords: Array[Vector2i] = []
+var starting_capital_ids: Array[int] = []
+var pending_political_events: Array[Dictionary] = []
+var next_political_event_id: int = 0
 
 # Tracking
 var next_hero_id: int = 0
 var next_town_id: int = 0
+var next_unit_id: int = 0
 var turn_log: Array[Dictionary] = []  # Events logged this turn
 
 
@@ -39,9 +47,24 @@ func set_sim_seed(seed_value: int) -> void:
 
 func load_game_data() -> void:
 	History.clear()
-	_load_regions()
+	pending_political_events.clear()
+	next_political_event_id = 0
+	_generate_regions()
 	_load_civilizations()
+	_assign_starting_capitals()
 	_recalculate_civ_populations()
+
+
+func start_new_game() -> void:
+	## Called after player_civ_id is set (e.g. from PregameScreen).
+	## Clears stale units and spawns fresh starting units for the chosen civ.
+	units.clear()
+	next_unit_id = 0
+	current_year = 0
+	turn_log.clear()
+	pending_political_events.clear()
+	next_political_event_id = 0
+	_spawn_starting_units()
 
 
 func _load_regions() -> void:
@@ -70,6 +93,49 @@ func _load_regions() -> void:
 			regions[region.id] = region
 
 
+func _generate_regions() -> void:
+	regions.clear()
+	region_hex_coords.clear()
+	land_hex_coords.clear()
+
+	if map_config.seed == 0:
+		map_config.seed = sim_seed
+
+	var result: Dictionary = HexWorldGenerator.generate(map_config)
+	regions = result.get("regions", {})
+	region_hex_coords = result.get("hex_coords", {})
+	land_hex_coords.clear()
+	for coord in result.get("land_coords", []):
+		if coord is Vector2i:
+			land_hex_coords.append(coord)
+	starting_capital_ids.clear()
+	for cid in result.get("capital_ids", []):
+		starting_capital_ids.append(int(cid))
+
+
+func _assign_starting_capitals() -> void:
+	if regions.is_empty() or civilizations.is_empty():
+		return
+
+	var capital_ids: Array[int] = starting_capital_ids
+	if capital_ids.is_empty():
+		capital_ids = HexWorldGenerator.pick_starting_capitals(regions, region_hex_coords, map_config)
+
+	var civ_ids: Array[int] = []
+	for key in civilizations.keys():
+		civ_ids.append(int(key))
+	civ_ids.sort()
+	for i in civ_ids.size():
+		if i >= capital_ids.size():
+			break
+		var civ: CivilizationData = civilizations[civ_ids[i]]
+		var region_id := capital_ids[i]
+		civ.capital_region_id = region_id
+		var region: RegionData = regions.get(region_id)
+		if region:
+			region.owner_id = civ.id
+
+
 func _load_civilizations() -> void:
 	var dir := DirAccess.open("res://data/civilizations/")
 	if not dir:
@@ -92,7 +158,18 @@ func _load_civilizations() -> void:
 			"res://data/civilizations/" + fname, "", ResourceLoader.CACHE_MODE_IGNORE
 		)
 		if civ:
+			PoliticalEvents.ensure_civ_state(civ)
 			civilizations[civ.id] = civ
+
+
+func queue_political_event(event: Dictionary) -> void:
+	pending_political_events.append(event)
+
+
+func pop_next_political_event() -> Dictionary:
+	if pending_political_events.is_empty():
+		return {}
+	return pending_political_events.pop_front()
 
 
 func _recalculate_civ_populations() -> void:
@@ -101,6 +178,31 @@ func _recalculate_civ_populations() -> void:
 	for region in regions.values():
 		if region.owner_id >= 0 and civilizations.has(region.owner_id):
 			civilizations[region.owner_id].total_population += region.population
+
+
+func _spawn_starting_units() -> void:
+	## Spawn default starting units for the player civ at their capital.
+	## Until the pre-game screen is implemented, use default leader traits.
+	if units.size() > 0:
+		return  # Already have units (e.g. loaded from save)
+	var player_civ := get_civilization(player_civ_id)
+	if not player_civ:
+		return
+	var capital_id := player_civ.capital_region_id
+
+	# Worker at capital
+	var worker := UnitData.new(-1, Constants.WORKER_NAME_POOL[0], Enums.UnitType.WORKER, player_civ_id, capital_id)
+	add_unit(worker)
+
+	# Explorer at capital
+	var explorer := UnitData.new(-1, Constants.EXPLORER_NAME_POOL[0], Enums.UnitType.EXPLORER, player_civ_id, capital_id)
+	add_unit(explorer)
+
+	# Leader at capital with default traits (Builder + Merchant)
+	var leader := UnitData.new(-1, "Leader", Enums.UnitType.LEADER, player_civ_id, capital_id)
+	leader.leader_trait_a = 0  # Builder: +10% production
+	leader.leader_trait_b = 4  # Merchant: +10% food
+	add_unit(leader)
 
 
 # --- Region Lookups ---
@@ -142,7 +244,9 @@ func get_adjacent_targets(civ_id: int) -> Array[RegionData]:
 			if neighbor and neighbor.owner_id != civ_id:
 				targets[neighbor_id] = neighbor
 	var result: Array[RegionData] = []
-	result.assign(targets.values())
+	for val in targets.values():
+		if val is RegionData:
+			result.append(val)
 	return result
 
 
@@ -169,7 +273,8 @@ func get_neighboring_civs(civ_id: int) -> Array[int]:
 			if neighbor and neighbor.owner_id >= 0 and neighbor.owner_id != civ_id:
 				neighbor_civ_ids[neighbor.owner_id] = true
 	var result: Array[int] = []
-	result.assign(neighbor_civ_ids.keys())
+	for key in neighbor_civ_ids.keys():
+		result.append(int(key))
 	return result
 
 
@@ -195,6 +300,38 @@ func add_hero(hero: HeroData) -> void:
 
 func remove_hero(hero_id: int) -> void:
 	heroes.erase(hero_id)
+
+
+# --- Unit Lookups ---
+
+func get_unit(unit_id: int) -> UnitData:
+	return units.get(unit_id)
+
+
+func get_units_by_civ(civ_id: int) -> Array[UnitData]:
+	var result: Array[UnitData] = []
+	for unit in units.values():
+		if unit.owner_civ_id == civ_id:
+			result.append(unit)
+	return result
+
+
+func get_units_in_region(region_id: int) -> Array[UnitData]:
+	var result: Array[UnitData] = []
+	for unit in units.values():
+		if unit.region_id == region_id:
+			result.append(unit)
+	return result
+
+
+func add_unit(unit: UnitData) -> void:
+	unit.id = next_unit_id
+	next_unit_id += 1
+	units[unit.id] = unit
+
+
+func remove_unit(unit_id: int) -> void:
+	units.erase(unit_id)
 
 
 # --- Turn Logging ---
@@ -248,22 +385,58 @@ func get_player_visibility(region_id: int) -> Enums.VisibilityState:
 
 func update_visibility(civ_id: int) -> void:
 	## Recompute visible and explored regions for a civilization.
-	## Owned regions + their neighbors are VISIBLE. All visible become permanently EXPLORED.
+	## Owned regions + neighbors (depth based on cartography skill) are VISIBLE.
+	## All visible become permanently EXPLORED.
 	var civ := get_civilization(civ_id)
 	if not civ:
 		return
 	civ.visible_regions.clear()
-	# Owned regions are always visible
+
+	# Determine reveal depth based on cartography skill
+	var reveal_depth := 1
+	var thresholds: Array = Constants.CARTOGRAPHY_REVEAL_THRESHOLDS
+	for i in range(thresholds.size() - 1, -1, -1):
+		if civ.cartography_skill >= thresholds[i]:
+			reveal_depth = i + 1
+			break
+
+	# Owned regions are always visible; flood-fill neighbors to reveal_depth
 	for region in get_regions_by_owner(civ_id):
-		civ.visible_regions[region.id] = true
-		# Adjacent regions are also visible
-		for neighbor_id in region.adjacency_list:
-			civ.visible_regions[neighbor_id] = true
+		_flood_reveal(civ, region.id, reveal_depth)
+
+	# Explorer units grant visibility at their position + adjacent (depth 1 extra)
+	for unit in units.values():
+		if unit.owner_civ_id == civ_id and unit.is_explorer() and unit.region_id >= 0:
+			_flood_reveal(civ, unit.region_id, reveal_depth)
+
 	# All visible regions become permanently explored
 	for region_id in civ.visible_regions:
 		if not civ.explored_set.has(region_id):
 			civ.explored_regions.append(region_id)
 			civ.explored_set[region_id] = true
+
+
+func _flood_reveal(civ: CivilizationData, start_id: int, max_depth: int) -> void:
+	## BFS flood-fill visibility from start_id out to max_depth hops.
+	var queue: Array = [[start_id, 0]]
+	var visited: Dictionary = {}
+
+	while not queue.is_empty():
+		var entry: Array = queue.pop_front()
+		var rid: int = entry[0]
+		var depth: int = entry[1]
+
+		if visited.has(rid):
+			continue
+		visited[rid] = true
+		civ.visible_regions[rid] = true
+
+		if depth < max_depth:
+			var region := get_region(rid)
+			if region:
+				for neighbor_id in region.adjacency_list:
+					if not visited.has(neighbor_id):
+						queue.append([neighbor_id, depth + 1])
 
 
 func update_all_visibility() -> void:

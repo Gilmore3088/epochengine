@@ -23,6 +23,24 @@ extends Resource
 @export var towns: Array = []  # Array of TownData objects
 @export var supply_value: float = 1.0  # 1.0 = full supply
 @export var renewable_degradation: float = 0.0  # 0.0 = pristine, up to MAX_DEGRADATION
+@export var has_river: bool = false
+@export var river_connections: Array[int] = []  # adjacent region IDs sharing river
+@export var has_lake: bool = false
+@export var river_order: int = 0  # 0=no river, 1=headwater, 2+=downstream
+@export var elevation: int = 0  # 0=lowland, 1=low, 2=mid, 3=high
+@export var moisture: float = 0.0  # 0-1 moisture field for worldgen
+@export var flow_accum: float = 0.0  # hydrology flow accumulation
+@export var basin_id: int = -1  # hydrology basin identifier
+@export var active_disaster: int = -1  # DisasterType or -1
+@export var disaster_years_remaining: int = 0
+@export var disaster_yield_penalty: float = 0.0
+@export var governor_focus: int = 0  # GovernorFocus enum
+@export var political_influence: float = 0.0  # 0-100
+@export var lobby_request: int = -1  # BuildingType or -1
+@export var lobby_ignore_years: int = 0
+@export var terraform_target: int = -1  # target TerrainType or -1
+@export var terraform_years_remaining: int = 0
+@export var reclamation_bonus: float = 0.0  # extra size_factor from reclamation
 
 
 func _init(

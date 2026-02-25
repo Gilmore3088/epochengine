@@ -14,6 +14,7 @@ static func process_year() -> Dictionary:
 		"population_changes": [],
 		"economy_results": [],
 		"stability_changes": [],
+		"legitimacy_changes": [],
 		"collapses": [],
 		"ai_events": [],
 		"battles": [],
@@ -29,6 +30,12 @@ static func process_year() -> Dictionary:
 		"resource_events": [],
 		"town_events": [],
 		"victory_events": [],
+		"trait_changes": [],
+	"diplomacy_events": [],
+	"unit_events": [],
+	"disaster_events": [],
+	"terraform_events": [],
+	"political_events": [],
 	}
 
 	# Accumulator for resource stability penalties (applied in stability step)
@@ -36,6 +43,9 @@ static func process_year() -> Dictionary:
 
 	# Step 1: Population Growth
 	_step_population_growth(events)
+
+	# Step 1.2: Natural Disasters (tick existing, roll new)
+	DisasterSimulation.process_disasters(events)
 
 	# Step 1.3: Auto-spawn initial towns for regions that qualify
 	_step_town_auto_spawn(events)
@@ -61,14 +71,30 @@ static func process_year() -> Dictionary:
 	# Step 3.75: Renewable resource recovery for unowned/lightly-developed regions
 	ResourceProduction.process_renewable_recovery(GameState.regions.values())
 
+	# Step 3.76: Unit movement (Workers, Explorers, Leaders)
+	UnitSimulation.process_unit_movement(events)
+
 	# Step 3.8: Tick war durations
 	_step_war_durations()
+
+	# Step 3.9: Tick diplomacy (NAP expiry, tribute cooldowns, trade auto-break)
+	_step_diplomacy_tick(events)
+
+	# Step 3.9b: Governor simulation (influence, lobbying, capital bonuses)
+	var governor_stability_mods := GovernorSimulation.process_governors(events)
+	for civ_id in governor_stability_mods:
+		var mod: float = governor_stability_mods[civ_id]
+		if mod != 0.0:
+			_resource_stability_penalties[civ_id] = _resource_stability_penalties.get(civ_id, 0.0) + mod
 
 	# Step 4: Stability Recalculation
 	_step_stability(events, _resource_stability_penalties)
 
 	# Step 4.5: Governance Tier Evaluation
 	_step_governance(events)
+
+	# Step 4.7: Legitimacy + Politics
+	_step_politics(events)
 
 	# Step 5: AI Decisions
 	_step_ai_decisions(events)
@@ -85,8 +111,17 @@ static func process_year() -> Dictionary:
 	# Step 8: Golden Age Evaluation
 	_step_golden_age_evaluation(events)
 
+	# Step 8.5: Trait Evolution
+	_step_trait_evolution(events)
+
 	# Step 9: Tech Emergence
 	_step_tech_emergence(events)
+
+	# Step 9.2: Cartography skill growth
+	_step_cartography_growth()
+
+	# Step 9.3: Future era terraforming tick
+	FutureSimulation.process_terraforming(events)
 
 	# Step 9.5: Victory/Defeat Check
 	_step_victory_check(events)
@@ -218,6 +253,34 @@ static func _step_governance(events: Dictionary) -> void:
 				"old_tier": GovernanceSimulation.get_tier_name(result["old_tier"]),
 				"new_tier": GovernanceSimulation.get_tier_name(result["new_tier"]),
 			})
+
+
+# --- Step 4.7: Legitimacy + Political Events ---
+
+static func _step_politics(events: Dictionary) -> void:
+	for civ in GameState.get_alive_civilizations():
+		var owned: Array[RegionData] = GameState.get_regions_by_owner(civ.id)
+		PoliticalEvents.ensure_civ_state(civ)
+		PoliticalEvents.drift_power_blocs(civ, owned)
+
+		var result: Dictionary = LegitimacySimulation.update_legitimacy(civ, owned)
+		if absf(result["new"] - result["old"]) >= 0.1:
+			events["legitimacy_changes"].append({
+				"civ_id": civ.id,
+				"civ_name": civ.civ_name,
+				"old_legitimacy": result["old"],
+				"new_legitimacy": result["new"],
+			})
+
+		var pol_events: Array = PoliticalEvents.generate_events(civ)
+		for pe in pol_events:
+			if civ.is_player:
+				GameState.queue_political_event(pe)
+			else:
+				var choice_idx: int = PoliticalEvents.pick_ai_choice(pe)
+				var choice_label: String = PoliticalEvents.resolve_event_choice(pe, choice_idx, false)
+				pe["resolved_choice"] = choice_label
+				events["political_events"].append(pe)
 
 
 # --- Step 5: AI Decisions ---
@@ -390,6 +453,62 @@ static func _step_war_durations() -> void:
 			civ.peace_cooldowns.erase(cid)
 
 
+# --- Step 3.9: Diplomacy Tick (NAP, Tribute, Trade auto-break) ---
+
+static func _step_diplomacy_tick(events: Dictionary) -> void:
+	for civ in GameState.get_alive_civilizations():
+		# Tick down NAP durations
+		var expired_naps: Array[int] = []
+		for partner_id in civ.nap_partners:
+			civ.nap_partners[partner_id] = civ.nap_partners[partner_id] - 1
+			if civ.nap_partners[partner_id] <= 0:
+				expired_naps.append(partner_id)
+		for partner_id in expired_naps:
+			civ.nap_partners.erase(partner_id)
+			# Remove from partner side too (only if we're the lower ID to avoid double-removal)
+			if civ.id < partner_id:
+				var partner := GameState.get_civilization(partner_id)
+				if partner:
+					partner.nap_partners.erase(civ.id)
+				events["diplomacy_events"].append({
+					"type": "nap_broken",
+					"civ_a_id": civ.id,
+					"civ_b_id": partner_id,
+					"civ_a_name": civ.civ_name,
+					"civ_b_name": partner.civ_name if partner else "unknown",
+					"reason": "expired",
+				})
+
+		# Tick down tribute cooldowns
+		var expired_tributes: Array[int] = []
+		for target_id in civ.tribute_cooldowns:
+			civ.tribute_cooldowns[target_id] = civ.tribute_cooldowns[target_id] - 1
+			if civ.tribute_cooldowns[target_id] <= 0:
+				expired_tributes.append(target_id)
+		for target_id in expired_tributes:
+			civ.tribute_cooldowns.erase(target_id)
+
+		# Auto-break trade on war
+		var broken_trades: Array[int] = []
+		for partner_id in civ.trade_partners:
+			if civ.war_targets.has(partner_id):
+				broken_trades.append(partner_id)
+		for partner_id in broken_trades:
+			civ.trade_partners.erase(partner_id)
+			var partner := GameState.get_civilization(partner_id)
+			if partner:
+				partner.trade_partners.erase(civ.id)
+			if civ.id < partner_id:  # Only emit once per pair
+				events["diplomacy_events"].append({
+					"type": "trade_broken",
+					"civ_a_id": civ.id,
+					"civ_b_id": partner_id,
+					"civ_a_name": civ.civ_name,
+					"civ_b_name": partner.civ_name if partner else "unknown",
+					"reason": "war",
+				})
+
+
 # --- Helpers ---
 
 static func _step_check_regionless(events: Dictionary) -> void:
@@ -481,6 +600,35 @@ static func _try_spawn_hero(civ: CivilizationData, events: Dictionary) -> void:
 		"civ_id": civ.id,
 		"civ_name": civ.civ_name,
 	})
+
+
+# --- Step 8.5: Trait Evolution ---
+
+static func _step_trait_evolution(events: Dictionary) -> void:
+	for civ in GameState.get_alive_civilizations():
+		civ.initialize_trait_tracking()
+		var trait_events := TraitSimulation.evolve_traits(civ, events)
+		for evt in trait_events:
+			events["trait_changes"].append(evt)
+
+
+# --- Step 9.2: Cartography Growth ---
+
+static func _step_cartography_growth() -> void:
+	## Grow cartography skill based on explorers, trade partners, and knowledge.
+	for civ in GameState.get_alive_civilizations():
+		if civ.cartography_skill >= 1.0:
+			continue
+		var growth := 0.0
+		# Explorer units boost cartography
+		for unit in GameState.units.values():
+			if unit.owner_civ_id == civ.id and unit.unit_type == Enums.UnitType.EXPLORER:
+				growth += Constants.CARTOGRAPHY_GROWTH_EXPLORER
+		# Trade partners
+		growth += Constants.CARTOGRAPHY_GROWTH_TRADE * civ.trade_partners.size()
+		# Knowledge
+		growth += Constants.CARTOGRAPHY_GROWTH_KNOWLEDGE * civ.knowledge / 100.0
+		civ.cartography_skill = minf(civ.cartography_skill + growth, 1.0)
 
 
 # --- Step 9.5: Victory/Defeat Check ---

@@ -135,7 +135,7 @@ func _build_outputs(town: TownData, region: RegionData) -> void:
 	_content.add_child(sec)
 
 	var outputs := TownSimulation.compute_town_outputs(town, region)
-	var supply_pct := int(outputs["supply_efficiency"] * 100.0)
+	var supply_pct: int = int(float(outputs["supply_efficiency"]) * 100.0)
 	var supply_tag := "" if supply_pct >= 100 else " x%d%%" % supply_pct
 
 	_add_stat("Food: %d base + %d bldg%s = %d" % [
@@ -264,17 +264,56 @@ func _build_buildings(town: TownData, _region: RegionData, civ: CivilizationData
 		build_row.add_child(option)
 
 		var build_btn := Button.new()
-		build_btn.text = "Build"
 		UITheme.style_button(build_btn)
 		build_btn.add_theme_font_size_override("font_size", FONT_BODY)
+		var has_worker := UnitSimulation.has_idle_worker_in_region(_region_id, civ.id)
+		if not has_worker:
+			build_btn.text = "Needs Worker"
+			build_btn.tooltip_text = "Move a Worker unit to this region first"
+			build_btn.disabled = true
+		else:
+			build_btn.text = "Build"
 		build_btn.pressed.connect(_on_build_pressed.bind(option))
 		build_row.add_child(build_btn)
 
 		_content.add_child(build_row)
 
+		# Train Worker button (requires Workshop in this town)
+		var train_check := UnitSimulation.can_train_unit(
+			Enums.UnitType.WORKER, _region_id, civ.id
+		)
+		var train_btn := Button.new()
+		UITheme.style_button(train_btn)
+		train_btn.add_theme_font_size_override("font_size", FONT_BODY)
+		train_btn.custom_minimum_size = Vector2(0, 28)
+		if train_check["can_train"]:
+			train_btn.text = "Train Worker (%d prod)" % train_check["cost"]
+		else:
+			train_btn.text = "Train Worker - %s" % train_check["reason"]
+			train_btn.disabled = true
+			train_btn.tooltip_text = train_check["reason"]
+		train_btn.pressed.connect(_on_train_worker_pressed)
+		_content.add_child(train_btn)
+
 
 func _on_build_pressed(option: OptionButton) -> void:
 	var building_type: int = option.get_selected_id()
+	var player_civ := GameState.get_player_civ()
+	var region := GameState.get_region(_region_id)
+	if not player_civ or not region:
+		return
+
+	if not UnitSimulation.has_idle_worker_in_region(_region_id, player_civ.id):
+		_show_error("Needs Worker in this region!")
+		return
+
+	var town: TownData = region.towns[_town_index] if _town_index < region.towns.size() else null
+	if town:
+		var cost := TownSimulation.calculate_building_cost(town, building_type)
+		if player_civ.production_stockpile < cost:
+			_show_error("Need %d production (have %d)" % [cost, player_civ.production_stockpile])
+			return
+
 	PlayerActions.queue_action({
 		"type": "construct_building",
 		"region_id": _region_id,
@@ -284,6 +323,25 @@ func _on_build_pressed(option: OptionButton) -> void:
 	EventBus.player_action_queued.emit("construct_building", {
 		"region_id": _region_id, "town_index": _town_index, "building_type": building_type,
 	})
+	_show_queued()
+
+
+func _on_train_worker_pressed() -> void:
+	var player_civ := GameState.get_player_civ()
+	if not player_civ:
+		return
+	var check := UnitSimulation.can_train_unit(
+		Enums.UnitType.WORKER, _region_id, player_civ.id
+	)
+	if not check["can_train"]:
+		_show_error(check["reason"])
+		return
+	PlayerActions.queue_action({
+		"type": "train_unit",
+		"unit_type": Enums.UnitType.WORKER,
+		"region_id": _region_id,
+	})
+	EventBus.player_action_queued.emit("train_unit", {"region_id": _region_id})
 	_show_queued()
 
 
@@ -320,6 +378,13 @@ func _show_queued() -> void:
 	var lbl := Label.new()
 	lbl.text = "Queued! Press Next Year to apply."
 	UITheme.style_label_body(lbl, FONT_BODY, UITheme.GOLD)
+	_content.add_child(lbl)
+
+
+func _show_error(msg: String) -> void:
+	var lbl := Label.new()
+	lbl.text = msg
+	UITheme.style_label_body(lbl, FONT_BODY, Color(0.9, 0.3, 0.2))
 	_content.add_child(lbl)
 
 

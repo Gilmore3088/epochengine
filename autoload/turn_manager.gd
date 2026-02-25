@@ -78,9 +78,25 @@ func _emit_events(events: Dictionary) -> void:
 			change["civ_id"], change["old_stability"], change["new_stability"]
 		)
 
+	# Legitimacy changes
+	for change in events.get("legitimacy_changes", []):
+		EventBus.legitimacy_changed.emit(
+			change["civ_id"], change["old_legitimacy"], change["new_legitimacy"]
+		)
+		var delta: float = float(change["new_legitimacy"]) - float(change["old_legitimacy"])
+		if absf(delta) >= 5.0:
+			History.record_event({
+				"year": GameState.current_year, "type": "legitimacy_shift",
+				"civ_id": change["civ_id"], "civ_name": change["civ_name"],
+				"description": "%s legitimacy %s%.0f" % [
+					change["civ_name"], "+" if delta > 0 else "", delta
+				],
+			})
+
 	# Record stability for all alive civs every year (for trend accuracy)
 	for civ in GameState.get_alive_civilizations():
 		History.record_stability(civ.id, GameState.current_year, civ.stability)
+		History.record_legitimacy(civ.id, GameState.current_year, civ.legitimacy)
 
 	# Collapses
 	for collapse in events["collapses"]:
@@ -154,7 +170,8 @@ func _emit_events(events: Dictionary) -> void:
 				EventBus.infrastructure_upgraded.emit(
 					event["civ_id"], event["region_name"], event["new_level"]
 				)
-				var infra_desc := "%s upgrades %s to level %d" % [event["civ_name"], event["region_name"], event["new_level"]]
+				var _infra_name: String = event.get("infra_name", "level %d" % event["new_level"])
+				var infra_desc: String = "%s builds %s in %s" % [event["civ_name"], _infra_name, event["region_name"]]
 				if not infra_detail.is_empty():
 					infra_desc += " (%s)" % infra_detail
 				GameState.log_event("infrastructure", {
@@ -242,6 +259,107 @@ func _emit_events(events: Dictionary) -> void:
 					"year": GameState.current_year, "type": "alliance_broken",
 					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
 					"description": "%s breaks alliance with %s" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+			"nap_formed":
+				EventBus.nap_formed.emit(event["civ_a_id"], event["civ_b_id"])
+				GameState.log_event("nap_formed", {
+					"civ_a": event["civ_a_name"],
+					"civ_b": event["civ_b_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "nap_formed",
+					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
+					"description": "%s and %s sign non-aggression pact" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+			"nap_broken":
+				EventBus.nap_broken.emit(event["civ_a_id"], event["civ_b_id"])
+				GameState.log_event("nap_broken", {
+					"civ_a": event["civ_a_name"],
+					"civ_b": event["civ_b_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "nap_broken",
+					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
+					"description": "%s breaks pact with %s" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+			"trade_formed":
+				EventBus.trade_formed.emit(event["civ_a_id"], event["civ_b_id"])
+				GameState.log_event("trade_formed", {
+					"civ_a": event["civ_a_name"],
+					"civ_b": event["civ_b_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "trade_formed",
+					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
+					"description": "%s and %s establish trade" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+			"trade_broken":
+				EventBus.trade_broken.emit(event["civ_a_id"], event["civ_b_id"])
+				GameState.log_event("trade_broken", {
+					"civ_a": event["civ_a_name"],
+					"civ_b": event["civ_b_name"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "trade_broken",
+					"civ_id": event["civ_a_id"], "civ_name": event["civ_a_name"],
+					"description": "%s and %s trade collapses" % [event["civ_a_name"], event["civ_b_name"]],
+				})
+			"tribute_demanded":
+				EventBus.tribute_demanded.emit(
+					event["demander_id"], event["target_id"], event["accepted"]
+				)
+				var tribute_result: String = "accepted" if bool(event["accepted"]) else "refused"
+				GameState.log_event("tribute_demanded", {
+					"demander": event["demander_name"],
+					"target": event["target_name"],
+					"accepted": event["accepted"],
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "tribute_demanded",
+					"civ_id": event["demander_id"], "civ_name": event["demander_name"],
+					"description": "%s demands tribute from %s (%s)" % [event["demander_name"], event["target_name"], tribute_result],
+				})
+
+	# Political events (AI-resolved)
+	for pe in events.get("political_events", []):
+		var desc: String = "%s — %s" % [
+			pe.get("title", "Political Event"),
+			pe.get("resolved_choice", "Decision"),
+		]
+		History.record_event({
+			"year": pe.get("year", GameState.current_year),
+			"type": pe.get("type", "political"),
+			"civ_id": pe.get("civ_id", -1),
+			"civ_name": pe.get("civ_name", ""),
+			"description": desc,
+		})
+
+	# Diplomacy tick events (NAP expiry, trade auto-break)
+	for diplo_evt in events.get("diplomacy_events", []):
+		match diplo_evt["type"]:
+			"nap_broken":
+				EventBus.nap_broken.emit(diplo_evt["civ_a_id"], diplo_evt["civ_b_id"])
+				GameState.log_event("nap_broken", {
+					"civ_a": diplo_evt["civ_a_name"],
+					"civ_b": diplo_evt["civ_b_name"],
+					"reason": diplo_evt.get("reason", ""),
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "nap_broken",
+					"civ_id": diplo_evt["civ_a_id"], "civ_name": diplo_evt["civ_a_name"],
+					"description": "%s and %s pact expires" % [diplo_evt["civ_a_name"], diplo_evt["civ_b_name"]],
+				})
+			"trade_broken":
+				EventBus.trade_broken.emit(diplo_evt["civ_a_id"], diplo_evt["civ_b_id"])
+				GameState.log_event("trade_broken", {
+					"civ_a": diplo_evt["civ_a_name"],
+					"civ_b": diplo_evt["civ_b_name"],
+					"reason": diplo_evt.get("reason", ""),
+				})
+				History.record_event({
+					"year": GameState.current_year, "type": "trade_broken",
+					"civ_id": diplo_evt["civ_a_id"], "civ_name": diplo_evt["civ_a_name"],
+					"description": "%s and %s trade collapses (war)" % [diplo_evt["civ_a_name"], diplo_evt["civ_b_name"]],
 				})
 
 	# Town auto-spawn events
@@ -344,7 +462,7 @@ func _emit_events(events: Dictionary) -> void:
 
 		# Maintenance failures
 		for penalty in res_event["maintenance_penalties"]:
-			var res_name := ResourceProduction.get_resource_name(penalty["resource"])
+			var res_name: String = ResourceProduction.get_resource_name(int(penalty["resource"]))
 			EventBus.resource_maintenance_failure.emit(
 				civ_id, res_name, penalty["missing_inputs"]
 			)
@@ -426,3 +544,76 @@ func _emit_events(events: Dictionary) -> void:
 				"civ_id": v_event["civ_id"], "civ_name": v_event["civ_name"],
 				"description": "%s defeated: %s" % [v_event["civ_name"], v_event["defeat_reason"]],
 			})
+
+	# Unit events
+	for unit_evt in events.get("unit_events", []):
+		match unit_evt["type"]:
+			"unit_moved":
+				EventBus.unit_moved.emit(
+					unit_evt["unit_id"], unit_evt["from_region_id"], unit_evt["to_region_id"]
+				)
+				GameState.log_event("unit_moved", {
+					"unit": unit_evt["unit_name"],
+					"from": unit_evt["from_region_name"],
+					"to": unit_evt["to_region_name"],
+				})
+			"unit_trained":
+				EventBus.unit_trained.emit(
+					unit_evt["unit_id"], unit_evt["civ_id"],
+					unit_evt["unit_type"], unit_evt["region_id"]
+				)
+				var type_name: String = Constants.UNIT_TYPE_NAMES.get(unit_evt["unit_type"], "Unit")
+				GameState.log_event("unit_trained", {
+					"civ": unit_evt.get("civ_name", ""),
+					"unit": unit_evt.get("unit_name", ""),
+					"type": type_name,
+				})
+
+	# Disaster events
+	for disaster_evt in events.get("disaster_events", []):
+		EventBus.disaster_occurred.emit(
+			disaster_evt["region_id"],
+			disaster_evt["disaster_name"],
+			disaster_evt["owner_id"],
+		)
+		GameState.log_event("disaster", {
+			"region": disaster_evt["region_name"],
+			"disaster": disaster_evt["disaster_name"],
+		})
+		History.record_event({
+			"year": GameState.current_year, "type": "disaster",
+			"region_id": disaster_evt["region_id"],
+			"description": "%s strikes %s (%d yr)" % [
+				disaster_evt["disaster_name"],
+				disaster_evt["region_name"],
+				disaster_evt["duration"],
+			],
+		})
+
+	# Trait evolution events
+	for trait_evt in events.get("trait_changes", []):
+		var old_display: String = trait_evt["old_tag"] if trait_evt["old_tag"] != "" else "Neutral"
+		var new_display: String = trait_evt["new_tag"] if trait_evt["new_tag"] != "" else "Neutral"
+		EventBus.trait_changed.emit(
+			trait_evt["civ_id"], trait_evt["bias_display"],
+			trait_evt["old_tag"], trait_evt["new_tag"],
+		)
+		GameState.log_event("trait_changed", {
+			"civ": trait_evt["civ_name"],
+			"bias": trait_evt["bias_display"],
+			"old_tag": old_display,
+			"new_tag": new_display,
+			"reason": trait_evt["reason"],
+		})
+		History.record_event({
+			"year": GameState.current_year, "type": "trait_changed",
+			"civ_id": trait_evt["civ_id"], "civ_name": trait_evt["civ_name"],
+			"description": "%s: %s shifts from %s to %s (%s)" % [
+				trait_evt["civ_name"], trait_evt["bias_display"],
+				old_display, new_display, trait_evt["reason"],
+			],
+		})
+
+	# Pending player political events (show modal)
+	if not GameState.pending_political_events.is_empty():
+		EventBus.political_event_pending.emit(GameState.pending_political_events[0])

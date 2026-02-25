@@ -7,6 +7,7 @@ extends PanelContainer
 var _scroll: ScrollContainer
 var _content: VBoxContainer
 var _close_btn: Button
+var _is_open: bool = false
 
 
 func _ready() -> void:
@@ -79,19 +80,21 @@ func _build_shell() -> void:
 
 
 func toggle() -> void:
-	if visible:
+	if _is_open:
 		_close()
 	else:
 		_open()
 
 
 func _open() -> void:
+	_is_open = true
 	_rebuild_content()
-	visible = true
+	PanelAnimator.open_panel(self)
 
 
 func _close() -> void:
-	visible = false
+	_is_open = false
+	PanelAnimator.close_panel(self)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -206,6 +209,10 @@ func _add_civ_card(player: CivilizationData, civ: CivilizationData) -> void:
 	elif player.alliance_partners.has(civ.id):
 		rel_text = "ALLIED"
 		rel_color = Color(0.3, 0.75, 0.4)
+	elif player.nap_partners.has(civ.id):
+		var nap_years: int = player.nap_partners.get(civ.id, 0)
+		rel_text = "NAP (%dyr left)" % nap_years
+		rel_color = Color(0.4, 0.6, 0.9)
 	else:
 		rel_text = "NEUTRAL"
 		rel_color = Color(0.6, 0.58, 0.55)
@@ -239,6 +246,13 @@ func _add_civ_card(player: CivilizationData, civ: CivilizationData) -> void:
 	traits_lbl.text = traits_text
 	UITheme.style_label_body(traits_lbl, 10, Color(0.55, 0.53, 0.50))
 	vbox.add_child(traits_lbl)
+
+	# Row 3.5: Trade status
+	if player.trade_partners.has(civ.id):
+		var trade_lbl := Label.new()
+		trade_lbl.text = "Trade Agreement (+%d%% food/prod)" % int(Constants.TRADE_FOOD_BONUS_PERCENT * 100)
+		UITheme.style_label_body(trade_lbl, 10, Color(0.5, 0.8, 0.5))
+		vbox.add_child(trade_lbl)
 
 	# Row 4: Peace cooldown (if any)
 	var cooldown: int = player.peace_cooldowns.get(civ.id, 0)
@@ -291,6 +305,39 @@ func _add_civ_card(player: CivilizationData, civ: CivilizationData) -> void:
 			ally_btn.pressed.connect(_on_seek_alliance.bind(civ.id))
 			actions_row.add_child(ally_btn)
 
+		# Seek NAP (when neutral — not war, not allied, not already NAP'd)
+		if not player.alliance_partners.has(civ.id) and not player.nap_partners.has(civ.id):
+			var nap_btn := Button.new()
+			nap_btn.text = "Seek NAP"
+			nap_btn.focus_mode = Control.FOCUS_NONE
+			UITheme.style_button(nap_btn)
+			nap_btn.add_theme_font_size_override("font_size", 11)
+			nap_btn.pressed.connect(_on_seek_nap.bind(civ.id))
+			actions_row.add_child(nap_btn)
+
+		# Seek Trade (when at peace and not already trading)
+		if not player.trade_partners.has(civ.id):
+			var trade_btn := Button.new()
+			trade_btn.text = "Seek Trade"
+			trade_btn.focus_mode = Control.FOCUS_NONE
+			UITheme.style_button(trade_btn)
+			trade_btn.add_theme_font_size_override("font_size", 11)
+			trade_btn.pressed.connect(_on_seek_trade.bind(civ.id))
+			actions_row.add_child(trade_btn)
+
+		# Demand Tribute (when not allied, player military > target * ratio)
+		if not player.alliance_partners.has(civ.id):
+			var strength_ratio := player.military_strength / maxf(civ.military_strength, 1.0)
+			var tribute_cd: int = player.tribute_cooldowns.get(civ.id, 0)
+			if strength_ratio >= Constants.TRIBUTE_STRENGTH_RATIO and tribute_cd <= 0:
+				var tribute_btn := Button.new()
+				tribute_btn.text = "Demand Tribute"
+				tribute_btn.focus_mode = Control.FOCUS_NONE
+				UITheme.style_button(tribute_btn)
+				tribute_btn.add_theme_font_size_override("font_size", 11)
+				tribute_btn.pressed.connect(_on_demand_tribute.bind(civ.id))
+				actions_row.add_child(tribute_btn)
+
 		# Declare war (disabled during peace cooldown)
 		var war_btn := Button.new()
 		war_btn.text = "Declare War"
@@ -322,6 +369,27 @@ func _on_seek_alliance(target_civ_id: int) -> void:
 	var action := {"type": "seek_alliance", "target_civ_id": target_civ_id}
 	PlayerActions.queue_action(action)
 	EventBus.player_action_queued.emit("seek_alliance", action)
+	_rebuild_content()
+
+
+func _on_seek_nap(target_civ_id: int) -> void:
+	var action := {"type": "seek_nap", "target_civ_id": target_civ_id}
+	PlayerActions.queue_action(action)
+	EventBus.player_action_queued.emit("seek_nap", action)
+	_rebuild_content()
+
+
+func _on_seek_trade(target_civ_id: int) -> void:
+	var action := {"type": "seek_trade", "target_civ_id": target_civ_id}
+	PlayerActions.queue_action(action)
+	EventBus.player_action_queued.emit("seek_trade", action)
+	_rebuild_content()
+
+
+func _on_demand_tribute(target_civ_id: int) -> void:
+	var action := {"type": "demand_tribute", "target_civ_id": target_civ_id}
+	PlayerActions.queue_action(action)
+	EventBus.player_action_queued.emit("demand_tribute", action)
 	_rebuild_content()
 
 

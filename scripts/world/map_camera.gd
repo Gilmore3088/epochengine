@@ -7,7 +7,7 @@ extends Camera2D
 const PAN_SPEED := 600.0
 const ZOOM_SPEED := 0.1
 const ZOOM_MIN := 0.2
-const ZOOM_MAX := 4.0
+const ZOOM_MAX := 6.0
 const DRAG_THRESHOLD := 4.0  # pixels before drag starts (prevents accidental pan on click)
 
 var is_dragging: bool = false

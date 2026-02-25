@@ -19,6 +19,8 @@ static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 		Enums.CivState.DECLINING:
 			events.append_array(_try_seek_peace(civ))
 			events.append_array(_try_seek_alliance(civ))
+			events.append_array(_try_seek_nap(civ))
+			events.append_array(_try_seek_trade(civ))
 			events.append_array(_try_declining_recovery(civ))
 		Enums.CivState.STABLE:
 			events.append_array(_try_expand(civ))
@@ -28,6 +30,9 @@ static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 			events.append_array(_try_construct_building(civ))
 			events.append_array(_try_seek_alliance(civ))
 			events.append_array(_try_break_alliance(civ))
+			events.append_array(_try_seek_nap(civ))
+			events.append_array(_try_seek_trade(civ))
+			events.append_array(_try_demand_tribute(civ))
 		Enums.CivState.GROWING:
 			events.append_array(_try_expand(civ))
 			events.append_array(_try_declare_war(civ))
@@ -36,6 +41,9 @@ static func make_decisions(civ: CivilizationData) -> Array[Dictionary]:
 			events.append_array(_try_construct_building(civ))
 			events.append_array(_try_seek_alliance(civ))
 			events.append_array(_try_break_alliance(civ))
+			events.append_array(_try_seek_nap(civ))
+			events.append_array(_try_seek_trade(civ))
+			events.append_array(_try_demand_tribute(civ))
 
 	# Update strategy (research focus + spending priority) every 10 years
 	if GameState.current_year % 10 == 0:
@@ -93,7 +101,7 @@ static func _try_expand(civ: CivilizationData) -> Array[Dictionary]:
 		return a.food_yield > b.food_yield
 	)
 
-	var target := neutral_targets[0]
+	var target: RegionData = neutral_targets[0]
 
 	# Reject expansion into poorly supplied territory
 	if _best_adjacent_supply(target, civ.id) < Constants.SUPPLY_MIN_THRESHOLD:
@@ -139,6 +147,8 @@ static func _try_declare_war(civ: CivilizationData) -> Array[Dictionary]:
 		if civ.war_targets.has(neighbor_id):
 			continue
 		if civ.alliance_partners.has(neighbor_id):
+			continue
+		if civ.nap_partners.has(neighbor_id):
 			continue
 		# Peace cooldown prevents immediate redeclaration
 		if civ.peace_cooldowns.get(neighbor_id, 0) > 0:
@@ -237,6 +247,7 @@ static func _try_invest_infrastructure(civ: CivilizationData) -> Array[Dictionar
 				"region_id": region.id,
 				"region_name": region.region_name,
 				"new_level": region.infrastructure_level,
+				"infra_name": Constants.INFRASTRUCTURE_NAMES.get(region.infrastructure_level, "Level %d" % region.infrastructure_level),
 			}]
 
 	return []
@@ -430,6 +441,7 @@ static func _try_declining_recovery(civ: CivilizationData) -> Array[Dictionary]:
 					"region_id": region.id,
 					"region_name": region.region_name,
 					"new_level": region.infrastructure_level,
+					"infra_name": Constants.INFRASTRUCTURE_NAMES.get(region.infrastructure_level, "Level %d" % region.infrastructure_level),
 				}]
 
 	# Build granary in towns if food deficit
@@ -535,3 +547,145 @@ static func _resource_value(region: RegionData) -> int:
 		for res_type in Constants.RESOURCE_TERRAIN_YIELDS[terrain_key]:
 			value += Constants.RESOURCE_TERRAIN_YIELDS[terrain_key][res_type]
 	return value
+
+
+static func _try_seek_nap(civ: CivilizationData) -> Array[Dictionary]:
+	## AI seeks non-aggression pacts with non-hostile neighbors.
+	if civ.stability < 40.0:
+		return []
+
+	var neighbor_ids := GameState.get_neighboring_civs(civ.id)
+	for neighbor_id in neighbor_ids:
+		if civ.war_targets.has(neighbor_id):
+			continue
+		if civ.alliance_partners.has(neighbor_id):
+			continue
+		if civ.nap_partners.has(neighbor_id):
+			continue
+
+		var neighbor := GameState.get_civilization(neighbor_id)
+		if not neighbor or neighbor.is_collapsed:
+			continue
+
+		var nap_chance := Constants.NAP_BASE_CHANCE * civ.diplomacy_bias * neighbor.diplomacy_bias
+
+		if GameState.sim_rng.randf() < nap_chance:
+			civ.nap_partners[neighbor_id] = Constants.NAP_DURATION
+			neighbor.nap_partners[civ.id] = Constants.NAP_DURATION
+			return [{
+				"type": "nap_formed",
+				"civ_a_id": civ.id,
+				"civ_b_id": neighbor_id,
+				"civ_a_name": civ.civ_name,
+				"civ_b_name": neighbor.civ_name,
+			}]
+
+	return []
+
+
+static func _try_seek_trade(civ: CivilizationData) -> Array[Dictionary]:
+	## AI seeks trade agreements with non-hostile civs.
+	## Bonus chance if allied or NAP'd.
+	if civ.stability < Constants.TRADE_STABILITY_THRESHOLD:
+		return []
+
+	for other in GameState.civilizations.values():
+		if other.id == civ.id or other.is_collapsed:
+			continue
+		if civ.war_targets.has(other.id):
+			continue
+		if civ.trade_partners.has(other.id):
+			continue
+
+		var trade_chance: float = Constants.TRADE_BASE_CHANCE * civ.economy_bias * other.economy_bias
+		if civ.alliance_partners.has(other.id):
+			trade_chance += 0.04
+		elif civ.nap_partners.has(other.id):
+			trade_chance += 0.02
+
+		if GameState.sim_rng.randf() < trade_chance:
+			civ.trade_partners.append(other.id)
+			other.trade_partners.append(civ.id)
+			return [{
+				"type": "trade_formed",
+				"civ_a_id": civ.id,
+				"civ_b_id": other.id,
+				"civ_a_name": civ.civ_name,
+				"civ_b_name": other.civ_name,
+			}]
+
+	return []
+
+
+static func _try_demand_tribute(civ: CivilizationData) -> Array[Dictionary]:
+	## Strong AI demands production from weaker neighbors.
+	if civ.stability < 50.0:
+		return []
+
+	var neighbor_ids := GameState.get_neighboring_civs(civ.id)
+	for neighbor_id in neighbor_ids:
+		if civ.alliance_partners.has(neighbor_id):
+			continue
+		if civ.nap_partners.has(neighbor_id):
+			continue
+		if civ.tribute_cooldowns.get(neighbor_id, 0) > 0:
+			continue
+
+		var neighbor := GameState.get_civilization(neighbor_id)
+		if not neighbor or neighbor.is_collapsed:
+			continue
+
+		var strength_ratio := civ.military_strength / maxf(neighbor.military_strength, 1.0)
+		if strength_ratio < Constants.TRIBUTE_STRENGTH_RATIO:
+			continue
+
+		var demand_chance := Constants.TRIBUTE_BASE_CHANCE * civ.aggression_bias
+		if GameState.sim_rng.randf() < demand_chance:
+			civ.tribute_cooldowns[neighbor_id] = Constants.TRIBUTE_COOLDOWN_YEARS
+			neighbor.tribute_cooldowns[civ.id] = Constants.TRIBUTE_COOLDOWN_YEARS
+
+			# Acceptance: weaker civ with high diplomacy more likely to accept
+			var accept_chance := 0.3 + neighbor.diplomacy_bias * 0.3
+			var accepted: bool = GameState.sim_rng.randf() < accept_chance
+
+			var events: Array[Dictionary] = []
+			if accepted:
+				var amount := mini(Constants.TRIBUTE_PRODUCTION_AMOUNT, neighbor.production_stockpile)
+				neighbor.production_stockpile -= amount
+				civ.production_stockpile += amount
+				events.append({
+					"type": "tribute_demanded",
+					"demander_id": civ.id,
+					"target_id": neighbor_id,
+					"demander_name": civ.civ_name,
+					"target_name": neighbor.civ_name,
+					"accepted": true,
+					"amount": amount,
+				})
+			else:
+				events.append({
+					"type": "tribute_demanded",
+					"demander_id": civ.id,
+					"target_id": neighbor_id,
+					"demander_name": civ.civ_name,
+					"target_name": neighbor.civ_name,
+					"accepted": false,
+				})
+				# Refused tribute may lead to war
+				var war_chance := Constants.TRIBUTE_REFUSAL_WAR_CHANCE * civ.aggression_bias
+				if GameState.sim_rng.randf() < war_chance:
+					if not civ.war_targets.has(neighbor_id):
+						civ.war_targets.append(neighbor_id)
+						neighbor.war_targets.append(civ.id)
+						civ.war_durations[neighbor_id] = 0
+						neighbor.war_durations[civ.id] = 0
+						events.append({
+							"type": "war_declared",
+							"attacker_id": civ.id,
+							"defender_id": neighbor_id,
+							"attacker_name": civ.civ_name,
+							"defender_name": neighbor.civ_name,
+						})
+			return events
+
+	return []

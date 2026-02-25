@@ -16,7 +16,7 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 config/name="Epoch Engine"
 config/description="Map-driven civilization evolution simulator"
-run/main_scene="res://scenes/main.tscn"
+run/main_scene="res://scenes/pregame.tscn"
 config/features=PackedStringArray("4.6", "GL Compatibility")
 config/icon="res://icon.svg"
 
@@ -26,6 +26,8 @@ EventBus="*res://autoload/event_bus.gd"
 GameState="*res://autoload/game_state.gd"
 TurnManager="*res://autoload/turn_manager.gd"
 SaveManager="*res://autoload/save_manager.gd"
+TutorialManager="*res://autoload/tutorial_manager.gd"
+AudioManager="*res://autoload/audio_manager.gd"
 
 [display]
 

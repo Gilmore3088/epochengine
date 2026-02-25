@@ -34,14 +34,14 @@ func _on_game_won(victory_type: String, details: Dictionary) -> void:
 	_is_victory = true
 	_build_overlay()
 	_build_victory_content(victory_type, details)
-	visible = true
+	PanelAnimator.open_panel(self)
 
 
 func _on_game_lost(reason: String, details: Dictionary) -> void:
 	_is_victory = false
 	_build_overlay()
 	_build_defeat_content(reason, details)
-	visible = true
+	PanelAnimator.open_panel(self)
 
 
 func _unhandled_input(event: InputEvent) -> void:

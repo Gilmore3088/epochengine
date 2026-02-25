@@ -135,6 +135,16 @@ static func _resource_shortage_penalty(
 	return penalty
 
 
+static func get_war_exhaustion(civ: CivilizationData) -> float:
+	## Public helper for other systems (e.g., legitimacy).
+	return _war_exhaustion(civ)
+
+
+static func get_shortage_penalty(civ: CivilizationData, owned_regions: Array[RegionData]) -> float:
+	## Public helper for other systems (e.g., legitimacy).
+	return _resource_shortage_penalty(civ, owned_regions)
+
+
 static func _hero_modifier(civ: CivilizationData) -> float:
 	## Reformer heroes add stability directly.
 	var bonus := 0.0

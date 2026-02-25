@@ -25,11 +25,26 @@ static func calculate_food_production(
 		# Development tier multiplier (sub-linear scaling on base yields)
 		food = int(float(food) * DevelopmentTierSimulation.get_economy_multiplier(region.development_tier))
 
+		# Geographic bonuses (river/lake)
+		if region.has_river:
+			food += Constants.RIVER_FOOD_BONUS
+		if region.has_lake:
+			food += Constants.LAKE_FOOD_BONUS
+
+		# Disaster yield penalty
+		if region.disaster_yield_penalty > 0.0:
+			food = int(float(food) * (1.0 - region.disaster_yield_penalty))
+
 		# Golden age bonus
 		if civ.is_in_golden_age():
 			food = int(food * (1.0 + Constants.GOLDEN_AGE_FOOD_BONUS))
 
 		total += food
+
+	# Trade agreement bonus (applied to total, not per-region)
+	if not civ.trade_partners.is_empty():
+		total = int(float(total) * (1.0 + Constants.TRADE_FOOD_BONUS_PERCENT * civ.trade_partners.size()))
+
 	return total
 
 
@@ -56,6 +71,10 @@ static func calculate_production_output(
 		# Development tier multiplier (sub-linear scaling on base yields)
 		prod = int(float(prod) * DevelopmentTierSimulation.get_economy_multiplier(region.development_tier))
 
+		# Disaster yield penalty
+		if region.disaster_yield_penalty > 0.0:
+			prod = int(float(prod) * (1.0 - region.disaster_yield_penalty))
+
 		# Visionary hero bonus
 		var hero_bonus := 1.0
 		for hero_id in civ.hero_ids:
@@ -68,7 +87,16 @@ static func calculate_production_output(
 		if civ.is_in_golden_age():
 			prod = int(prod * (1.0 + Constants.GOLDEN_AGE_PRODUCTION_BONUS))
 
+		# Capital production bonus
+		if region.id == civ.capital_region_id:
+			prod = int(float(prod) * (1.0 + Constants.CAPITAL_PRODUCTION_BONUS))
+
 		total += prod
+
+	# Trade agreement bonus (applied to total, not per-region)
+	if not civ.trade_partners.is_empty():
+		total = int(float(total) * (1.0 + Constants.TRADE_PRODUCTION_BONUS_PERCENT * civ.trade_partners.size()))
+
 	return total
 
 
@@ -181,10 +209,16 @@ static func pay_expansion_cost(
 static func try_upgrade_infrastructure(
 	civ: CivilizationData, region: RegionData
 ) -> bool:
-	## Attempt to upgrade a region's infrastructure if affordable.
+	## Attempt to upgrade a region's infrastructure if affordable, tech unlocked, and worker present.
+	if not UnitSimulation.has_idle_worker_in_region(region.id, civ.id):
+		return false
 	if region.infrastructure_level >= Constants.INFRASTRUCTURE_MAX_LEVEL:
 		return false
-	var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * (region.infrastructure_level + 1)
+	var next_level := region.infrastructure_level + 1
+	var required_tech: String = Constants.INFRASTRUCTURE_TECH_GATES.get(next_level, "")
+	if required_tech != "" and not civ.technologies.has(required_tech):
+		return false
+	var cost := Constants.INFRASTRUCTURE_UPGRADE_COST * next_level
 	if civ.production_stockpile < cost:
 		return false
 	civ.production_stockpile -= cost

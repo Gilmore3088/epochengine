@@ -60,6 +60,15 @@ var playing_label: Label
 # Toast notification elements
 var toast_container: VBoxContainer
 
+# War status bar
+var war_status_panel: PanelContainer
+var war_status_vbox: VBoxContainer
+
+# Animated number tracking
+var _prev_food: int = 0
+var _prev_prod: int = 0
+var _prev_military: float = 0.0
+
 # Autosave: 3 rotating slots, every 25 years
 var _autosave_slot: int = 0
 const AUTOSAVE_INTERVAL := 25
@@ -82,6 +91,15 @@ func _ready() -> void:
 	timer.one_shot = false
 	timer.timeout.connect(_on_auto_play_timeout)
 	add_child(timer)
+	# Tutorial welcome tips (delayed)
+	_trigger_welcome_tips()
+
+
+func _trigger_welcome_tips() -> void:
+	await get_tree().create_timer(1.0).timeout
+	TutorialManager.try_show_tip("welcome")
+	await get_tree().create_timer(4.0).timeout
+	TutorialManager.try_show_tip("advance_turn")
 
 
 func _build_ui() -> void:
@@ -90,6 +108,7 @@ func _build_ui() -> void:
 	_build_overlay_strip()
 	_build_event_log()
 	_build_toast_container()
+	_build_war_status_bar()
 	_build_summary_modal()
 	_build_info_panels()
 
@@ -172,7 +191,7 @@ func _build_top_bar() -> void:
 	production_label = Label.new()
 	production_label.text = "Production: 0"
 	UITheme.style_label_stat(production_label, 15, UITheme.COLOR_PRODUCTION)
-	production_label.tooltip_text = "Production stockpile.\nUsed for infrastructure, buildings,\nexpansion, and military upkeep."
+	production_label.tooltip_text = "Production stockpile.\nProduced by: terrain yields + infrastructure.\nConsumed by: military upkeep every year.\nSpent on: expansion, buildings, infra upgrades.\nTip: Coastline and Volcanic regions produce more."
 	econ_group.add_child(production_label)
 
 	_add_separator(top_bar)
@@ -219,28 +238,28 @@ func _build_top_bar() -> void:
 	advance_button = Button.new()
 	advance_button.text = "Next Year"
 	advance_button.pressed.connect(_on_advance_pressed)
-	UITheme.style_button(advance_button)
+	UITheme.style_button_animated(advance_button)
 	advance_button.tooltip_text = "Advance one year (Space)"
 	time_group.add_child(advance_button)
 
 	play_btn = Button.new()
 	play_btn.text = "Play"
 	play_btn.pressed.connect(_toggle_auto_play)
-	UITheme.style_button(play_btn)
+	UITheme.style_button_animated(play_btn)
 	play_btn.tooltip_text = "Auto-advance turns (P)"
 	time_group.add_child(play_btn)
 
 	speed_5x_button = Button.new()
 	speed_5x_button.text = "+5"
 	speed_5x_button.pressed.connect(func() -> void: _start_fast_forward(5))
-	UITheme.style_button(speed_5x_button)
+	UITheme.style_button_animated(speed_5x_button)
 	speed_5x_button.tooltip_text = "Fast-forward 5 years"
 	time_group.add_child(speed_5x_button)
 
 	speed_10x_button = Button.new()
 	speed_10x_button.text = "+10"
 	speed_10x_button.pressed.connect(func() -> void: _start_fast_forward(10))
-	UITheme.style_button(speed_10x_button)
+	UITheme.style_button_animated(speed_10x_button)
 	speed_10x_button.tooltip_text = "Fast-forward 10 years"
 	time_group.add_child(speed_10x_button)
 
@@ -302,7 +321,7 @@ func _build_top_bar() -> void:
 	var diplo_btn := Button.new()
 	diplo_btn.text = "Diplomacy(D)"
 	diplo_btn.pressed.connect(func() -> void:
-		var dp := get_node_or_null("DiplomacyPanel") as DiplomacyPanel
+		var dp: DiplomacyPanel = get_node_or_null("DiplomacyPanel") as DiplomacyPanel
 		if dp:
 			dp.toggle()
 	)
@@ -462,7 +481,7 @@ func _cycle_overlay() -> void:
 	var current := GameState.current_overlay
 	var idx := OVERLAY_CYCLE_ORDER.find(current)
 	var next_idx := (idx + 1) % OVERLAY_CYCLE_ORDER.size()
-	var next_mode := OVERLAY_CYCLE_ORDER[next_idx]
+	var next_mode: int = OVERLAY_CYCLE_ORDER[next_idx]
 	_on_overlay_pressed(next_mode)
 
 
@@ -551,6 +570,73 @@ func _show_toast(text: String, color: Color) -> void:
 	tween.tween_callback(panel.queue_free)
 
 
+# ==================== WAR STATUS BAR ====================
+
+func _build_war_status_bar() -> void:
+	war_status_panel = PanelContainer.new()
+	war_status_panel.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	war_status_panel.offset_left = -270
+	war_status_panel.offset_right = -10
+	war_status_panel.offset_top = 56
+	war_status_panel.offset_bottom = 56
+	war_status_panel.add_theme_stylebox_override("panel", UITheme.make_panel_style(
+		Color(0.08, 0.05, 0.06, 0.90),
+		Color(0.7, 0.25, 0.2, 0.5),
+		5, 1, 8
+	))
+	war_status_panel.visible = false
+	add_child(war_status_panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 3)
+	war_status_panel.add_child(vbox)
+
+	var title := Label.new()
+	title.text = "Active Wars"
+	UITheme.style_label_header(title, 12)
+	title.add_theme_color_override("font_color", Color(0.85, 0.35, 0.3))
+	vbox.add_child(title)
+
+	war_status_vbox = VBoxContainer.new()
+	war_status_vbox.add_theme_constant_override("separation", 2)
+	vbox.add_child(war_status_vbox)
+
+
+func _update_war_status() -> void:
+	var civ := GameState.get_civilization(player_civ_id)
+	if not civ or civ.war_targets.is_empty():
+		war_status_panel.visible = false
+		return
+
+	war_status_panel.visible = true
+
+	# Clear old entries
+	for child in war_status_vbox.get_children():
+		child.queue_free()
+
+	for target_id in civ.war_targets:
+		var target := GameState.get_civilization(target_id)
+		if not target:
+			continue
+		var duration: int = civ.war_durations.get(target_id, 0)
+
+		var row := HBoxContainer.new()
+		row.add_theme_constant_override("separation", 6)
+
+		# Color dot
+		var dot := ColorRect.new()
+		dot.custom_minimum_size = Vector2(8, 8)
+		dot.color = target.color if target.color else Color(0.8, 0.3, 0.3)
+		row.add_child(dot)
+
+		var lbl := Label.new()
+		lbl.text = "vs %s (Yr %d)" % [target.civ_name, duration]
+		UITheme.style_label_body(lbl, 11, Color(0.85, 0.55, 0.5))
+		row.add_child(lbl)
+
+		war_status_vbox.add_child(row)
+
+
 # ==================== SUMMARY MODAL ====================
 
 func _build_summary_modal() -> void:
@@ -628,7 +714,8 @@ func _capture_pre_state() -> void:
 	ff_counters = {
 		"wars": 0, "heroes": 0, "techs": 0,
 		"battles": 0, "collapses": 0, "golden_ages": 0,
-		"expansions": 0, "shortages": 0,
+		"expansions": 0, "shortages": 0, "trait_shifts": 0,
+		"naps": 0, "trades": 0, "tributes": 0,
 	}
 
 
@@ -687,6 +774,18 @@ func _show_summary() -> void:
 	if int(ff_counters["shortages"]) > 0:
 		lines.append("[color=#e85]%d shortage(s) detected[/color]" % ff_counters["shortages"])
 		has_events = true
+	if int(ff_counters["trait_shifts"]) > 0:
+		lines.append("[color=#c8a]%d personality shift(s)[/color]" % ff_counters["trait_shifts"])
+		has_events = true
+	if int(ff_counters["naps"]) > 0:
+		lines.append("[color=#8af]%d non-aggression pact(s)[/color]" % ff_counters["naps"])
+		has_events = true
+	if int(ff_counters["trades"]) > 0:
+		lines.append("[color=#8c8]%d trade agreement(s)[/color]" % ff_counters["trades"])
+		has_events = true
+	if int(ff_counters["tributes"]) > 0:
+		lines.append("[color=#e85]%d tribute demand(s)[/color]" % ff_counters["tributes"])
+		has_events = true
 	if not has_events:
 		lines.append("[color=#888]No major events[/color]")
 
@@ -740,8 +839,14 @@ func _connect_signals() -> void:
 	EventBus.resource_maintenance_failure.connect(_on_maintenance_failure)
 	EventBus.town_founded.connect(_on_town_founded)
 	EventBus.building_constructed.connect(_on_building_constructed)
+	EventBus.disaster_occurred.connect(_on_disaster_occurred)
 	EventBus.game_won.connect(_on_game_won)
 	EventBus.game_lost.connect(_on_game_lost)
+	EventBus.trait_changed.connect(_on_trait_changed)
+	EventBus.nap_formed.connect(_on_nap_formed)
+	EventBus.trade_formed.connect(_on_trade_formed)
+	EventBus.tribute_demanded.connect(_on_tribute_demanded)
+	EventBus.political_event_pending.connect(_on_political_event_pending)
 
 
 func _update_display() -> void:
@@ -766,9 +871,46 @@ func _update_display() -> void:
 	else:
 		golden_age_hint.visible = false
 
-	food_label.text = "Food: %d" % civ.food_stockpile
-	production_label.text = "Prod: %d" % civ.production_stockpile
-	military_label.text = "Army: %.0f" % civ.military_strength
+	# Economy breakdown for HUD labels
+	var owned_regions := GameState.get_regions_by_owner(civ.id)
+
+	# Food: show net rate inline
+	var food_produced := EconomySimulation.calculate_food_production(civ, owned_regions)
+	var food_consumed := EconomySimulation.calculate_food_consumption(civ)
+	var food_net := food_produced - food_consumed
+	var food_sign := "+" if food_net >= 0 else ""
+	_animate_label_int(food_label, _prev_food, civ.food_stockpile,
+		"Food: ", "%s%d/yr" % [food_sign, food_net])
+	_prev_food = civ.food_stockpile
+
+	food_label.tooltip_text = (
+		"Food stockpile: %d\n" % civ.food_stockpile
+		+ "Produced: %d/yr (terrain + towns)\n" % food_produced
+		+ "Consumed: -%d/yr (population)\n" % food_consumed
+		+ "Net: %s%d/yr" % [food_sign, food_net]
+	)
+
+	_animate_label_float(military_label, _prev_military, civ.military_strength, "Army: ")
+	_prev_military = civ.military_strength
+
+	# Production: show net rate inline so the player sees the trend
+	var prod_produced := EconomySimulation.calculate_production_output(civ, owned_regions)
+	var mil_upkeep := EconomySimulation.calculate_military_upkeep(civ)
+	var prod_net := prod_produced - mil_upkeep
+	var net_sign := "+" if prod_net >= 0 else ""
+	_animate_label_int(production_label, _prev_prod, civ.production_stockpile,
+		"Prod: ", "%s%d/yr" % [net_sign, prod_net])
+	_prev_prod = civ.production_stockpile
+
+	# Dynamic production tooltip with live breakdown
+	production_label.tooltip_text = (
+		"Production stockpile: %d\n" % civ.production_stockpile
+		+ "Produced: %d/yr (terrain + infra)\n" % prod_produced
+		+ "Military upkeep: -%d/yr\n" % mil_upkeep
+		+ "Net: %s%d/yr\n" % [net_sign, prod_net]
+		+ "Spent on: expansion, buildings, infra upgrades.\n"
+		+ "Tip: Coastline and Volcanic regions produce more."
+	)
 
 	# Era and governance with badge styling
 	var era_names := ["Prehistoric", "Classical", "Industrial", "Future"]
@@ -790,6 +932,30 @@ func _update_display() -> void:
 
 	# Resource bar
 	_update_resource_bar()
+
+	# War status
+	_update_war_status()
+
+
+func _animate_label_int(lbl: Label, from: int, to: int, prefix: String, suffix: String = "") -> void:
+	var sfx := " (%s)" % suffix if suffix != "" else ""
+	if from == to or is_fast_forwarding:
+		lbl.text = "%s%d%s" % [prefix, to, sfx]
+		return
+	var tw := create_tween()
+	tw.tween_method(func(val: float) -> void:
+		lbl.text = "%s%d%s" % [prefix, int(val), sfx]
+	, float(from), float(to), 0.3)
+
+
+func _animate_label_float(lbl: Label, from: float, to: float, prefix: String) -> void:
+	if absf(from - to) < 0.5 or is_fast_forwarding:
+		lbl.text = "%s%.0f" % [prefix, to]
+		return
+	var tw := create_tween()
+	tw.tween_method(func(val: float) -> void:
+		lbl.text = "%s%.0f" % [prefix, val]
+	, from, to, 0.3)
 
 
 func _update_stability_color(value: float) -> void:
@@ -835,12 +1001,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		EventBus.open_timeline.emit()
 	if event is InputEventKey and event.pressed:
 		if event.keycode == KEY_D:
-			var dp := get_node_or_null("DiplomacyPanel") as DiplomacyPanel
+			var dp: DiplomacyPanel = get_node_or_null("DiplomacyPanel") as DiplomacyPanel
 			if dp:
 				dp.toggle()
 				get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_V:
-			var tracker := get_node_or_null("VictoryTracker") as VictoryTracker
+			var tracker: VictoryTracker = get_node_or_null("VictoryTracker") as VictoryTracker
 			if tracker:
 				tracker.toggle()
 				get_viewport().set_input_as_handled()
@@ -849,7 +1015,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_dismiss_summary()
 				get_viewport().set_input_as_handled()
 			elif not game_ended:
-				var pmenu := get_node_or_null("PauseMenu") as PauseMenu
+				var pmenu: PauseMenu = get_node_or_null("PauseMenu") as PauseMenu
 				if pmenu and not pmenu.visible:
 					pmenu.open_menu()
 					get_viewport().set_input_as_handled()
@@ -995,14 +1161,15 @@ func _on_war_declared(attacker_id: int, defender_id: int) -> void:
 		ff_counters["wars"] += 1
 		if attacker_id == player_civ_id or defender_id == player_civ_id:
 			ff_should_pause = true
-	var a := GameState.get_civilization(attacker_id)
-	var d := GameState.get_civilization(defender_id)
+	var a: CivilizationData = GameState.get_civilization(attacker_id)
+	var d: CivilizationData = GameState.get_civilization(defender_id)
 	if a and d:
 		_log("[color=#e55][WAR] %s declares war on %s[/color]" % [a.civ_name, d.civ_name])
 		if is_auto_playing:
 			_show_toast("%s declares war on %s" % [a.civ_name, d.civ_name], Color(0.9, 0.3, 0.3))
 			if attacker_id == player_civ_id or defender_id == player_civ_id:
 				_pause_auto_play()
+	_update_war_status()
 
 
 func _on_hero_spawned(hero_id: int, civ_id: int, _type: Enums.HeroType) -> void:
@@ -1071,6 +1238,12 @@ func _on_era_changed(civ_id: int, era_name: String) -> void:
 		_log("[color=#da5][ERA] %s enters the %s era[/color]" % [civ.civ_name, era_name])
 		if civ_id == player_civ_id:
 			_show_toast("A New Era: %s" % era_name, UITheme.GOLD)
+			# Cartography advancement toast (delayed so it doesn't stack)
+			get_tree().create_timer(1.5).timeout.connect(func() -> void:
+				_show_toast("Cartographers refine their mapping techniques", Color(0.72, 0.68, 0.55))
+			)
+			# Refresh map visuals for new era style
+			EventBus.visibility_updated.emit()
 		elif is_auto_playing:
 			_show_toast("%s enters the %s era" % [civ.civ_name, era_name], Color(0.85, 0.65, 0.28))
 
@@ -1121,7 +1294,7 @@ func _on_ai_decision(civ_id: int, decision_type: String, details: Dictionary) ->
 			ff_counters["expansions"] += 1
 		var civ := GameState.get_civilization(civ_id)
 		if civ:
-			var cost_text := " (-%d prod)" % details.get("cost", 0) if details.has("cost") else ""
+			var cost_text: String = " (-%d prod)" % int(details.get("cost", 0)) if details.has("cost") else ""
 			_log("[color=#8c8][EXPAND] %s expands into %s%s[/color]" % [
 				civ.civ_name, details.get("region", "?"), cost_text
 			])
@@ -1130,8 +1303,9 @@ func _on_ai_decision(civ_id: int, decision_type: String, details: Dictionary) ->
 func _on_infrastructure_upgraded(civ_id: int, region_name: String, new_level: int) -> void:
 	var civ := GameState.get_civilization(civ_id)
 	if civ:
-		_log("[color=#9ab][INFRA] %s upgrades %s to level %d[/color]" % [
-			civ.civ_name, region_name, new_level
+		var infra_name: String = Constants.INFRASTRUCTURE_NAMES.get(new_level, "level %d" % new_level)
+		_log("[color=#9ab][INFRA] %s builds %s in %s[/color]" % [
+			civ.civ_name, infra_name, region_name
 		])
 
 
@@ -1142,6 +1316,7 @@ func _on_peace_declared(civ_a_id: int, civ_b_id: int) -> void:
 		_log("[color=#8b8][PEACE] %s and %s declare peace[/color]" % [a.civ_name, b.civ_name])
 		if is_auto_playing:
 			_show_toast("%s and %s declare peace" % [a.civ_name, b.civ_name], Color(0.55, 0.73, 0.55))
+	_update_war_status()
 
 
 func _on_dev_tier_changed(region_id: int, civ_id: int, old_tier: String, new_tier: String) -> void:
@@ -1174,6 +1349,88 @@ func _on_building_constructed(region_id: int, town_name: String, building_name: 
 	var region := GameState.get_region(region_id)
 	var region_name: String = region.region_name if region else "Unknown"
 	_log("[color=#9ab][BUILD] %s built in %s (%s)[/color]" % [building_name, town_name, region_name])
+	if region and region.owner_id == GameState.player_civ_id:
+		_show_toast("%s built %s" % [town_name, building_name], Color(0.55, 0.78, 0.45))
+
+
+func _on_disaster_occurred(region_id: int, disaster_name: String, owner_id: int) -> void:
+	var region := GameState.get_region(region_id)
+	var region_name: String = region.region_name if region else "Unknown"
+	_log("[color=#f66][DISASTER] %s strikes %s[/color]" % [disaster_name, region_name])
+	if owner_id == GameState.player_civ_id:
+		_show_toast("%s in %s!" % [disaster_name, region_name], Color(0.9, 0.3, 0.2))
+
+
+func _on_trait_changed(civ_id: int, bias_name: String, old_tag: String, new_tag: String) -> void:
+	if is_fast_forwarding:
+		ff_counters["trait_shifts"] += 1
+		return
+	var civ := GameState.get_civilization(civ_id)
+	if not civ:
+		return
+	var old_display: String = old_tag if old_tag != "" else "Neutral"
+	var new_display: String = new_tag if new_tag != "" else "Neutral"
+	_log("[color=#c8a][TRAIT] %s: %s shifts from %s to %s[/color]" % [
+		civ.civ_name, bias_name, old_display, new_display
+	])
+	if is_auto_playing or civ_id == player_civ_id:
+		var toast_text: String
+		if new_tag != "":
+			toast_text = "%s becomes %s" % [civ.civ_name, new_display]
+		else:
+			toast_text = "%s %s returns to Neutral" % [civ.civ_name, bias_name]
+		_show_toast(toast_text, Color(0.78, 0.52, 0.66))
+
+
+# ==================== DIPLOMACY (NAP / TRADE / TRIBUTE) ====================
+
+func _on_nap_formed(civ_a_id: int, civ_b_id: int) -> void:
+	if is_fast_forwarding:
+		ff_counters["naps"] += 1
+		return
+	var civ_a := GameState.get_civilization(civ_a_id)
+	var civ_b := GameState.get_civilization(civ_b_id)
+	if not civ_a or not civ_b:
+		return
+	_log("[color=#8af][NAP] %s and %s sign non-aggression pact[/color]" % [civ_a.civ_name, civ_b.civ_name])
+	if civ_a_id == player_civ_id or civ_b_id == player_civ_id:
+		var other_name: String = civ_b.civ_name if civ_a_id == player_civ_id else civ_a.civ_name
+		_show_toast("NAP signed with %s" % other_name, Color(0.4, 0.6, 0.9))
+
+
+func _on_trade_formed(civ_a_id: int, civ_b_id: int) -> void:
+	if is_fast_forwarding:
+		ff_counters["trades"] += 1
+		return
+	var civ_a := GameState.get_civilization(civ_a_id)
+	var civ_b := GameState.get_civilization(civ_b_id)
+	if not civ_a or not civ_b:
+		return
+	_log("[color=#8c8][TRADE] %s and %s establish trade[/color]" % [civ_a.civ_name, civ_b.civ_name])
+	if civ_a_id == player_civ_id or civ_b_id == player_civ_id:
+		var other_name: String = civ_b.civ_name if civ_a_id == player_civ_id else civ_a.civ_name
+		_show_toast("Trade established with %s" % other_name, Color(0.5, 0.8, 0.5))
+
+
+func _on_tribute_demanded(demander_id: int, target_id: int, accepted: bool) -> void:
+	if is_fast_forwarding:
+		ff_counters["tributes"] += 1
+		return
+	var demander := GameState.get_civilization(demander_id)
+	var target := GameState.get_civilization(target_id)
+	if not demander or not target:
+		return
+	var result_text := "accepted" if accepted else "refused"
+	_log("[color=#e85][TRIBUTE] %s demands tribute from %s (%s)[/color]" % [demander.civ_name, target.civ_name, result_text])
+	if demander_id == player_civ_id:
+		_show_toast("%s %s tribute" % [target.civ_name, result_text], Color(0.9, 0.52, 0.3))
+	elif target_id == player_civ_id:
+		_show_toast("%s demands tribute (%s)" % [demander.civ_name, result_text], Color(0.9, 0.52, 0.3))
+
+
+func _on_political_event_pending(_event_data: Dictionary) -> void:
+	if is_auto_playing:
+		_pause_auto_play()
 
 
 # ==================== VICTORY / DEFEAT ====================
@@ -1200,6 +1457,14 @@ func _on_game_lost(reason: String, _details: Dictionary) -> void:
 # ==================== INFO PANELS ====================
 
 func _build_info_panels() -> void:
+	var briefing_panel := BriefingPanel.new()
+	briefing_panel.name = "BriefingPanel"
+	add_child(briefing_panel)
+
+	var political_panel := PoliticalEventPanel.new()
+	political_panel.name = "PoliticalEventPanel"
+	add_child(political_panel)
+
 	var turn_summary := TurnSummaryPanel.new()
 	add_child(turn_summary)
 
@@ -1232,7 +1497,7 @@ func _build_info_panels() -> void:
 	# Ensure RegionPanel exists and is connected (failsafe for missing node)
 	region_panel = get_node_or_null("RegionPanel")
 	if not region_panel:
-		var region_script := load("res://scripts/ui/region_panel.gd")
+		var region_script: Script = load("res://scripts/ui/region_panel.gd")
 		region_panel = region_script.new()
 		region_panel.name = "RegionPanel"
 		add_child(region_panel)
@@ -1246,3 +1511,12 @@ func _build_info_panels() -> void:
 	var desel := Callable(region_panel, "_close")
 	if not EventBus.region_deselected.is_connected(desel):
 		EventBus.region_deselected.connect(desel)
+
+	# Tutorial overlay and hotkey bar
+	var tutorial_overlay = load("res://scripts/ui/tutorial_overlay.gd").new()
+	tutorial_overlay.name = "TutorialOverlay"
+	add_child(tutorial_overlay)
+
+	var hotkey_bar = load("res://scripts/ui/hotkey_bar.gd").new()
+	hotkey_bar.name = "HotkeyBar"
+	add_child(hotkey_bar)

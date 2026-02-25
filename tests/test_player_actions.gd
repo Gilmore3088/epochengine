@@ -8,8 +8,10 @@ extends GutTest
 var _saved_regions: Dictionary
 var _saved_civs: Dictionary
 var _saved_heroes: Dictionary
+var _saved_units: Dictionary
 var _saved_year: int
 var _saved_player_id: int
+var _saved_next_unit_id: int
 
 
 func before_each() -> void:
@@ -17,8 +19,10 @@ func before_each() -> void:
 	_saved_regions = GameState.regions.duplicate()
 	_saved_civs = GameState.civilizations.duplicate()
 	_saved_heroes = GameState.heroes.duplicate()
+	_saved_units = GameState.units.duplicate()
 	_saved_year = GameState.current_year
 	_saved_player_id = GameState.player_civ_id
+	_saved_next_unit_id = GameState.next_unit_id
 	PlayerActions.clear_queue()
 
 
@@ -26,8 +30,10 @@ func after_each() -> void:
 	GameState.regions = _saved_regions
 	GameState.civilizations = _saved_civs
 	GameState.heroes = _saved_heroes
+	GameState.units = _saved_units
 	GameState.current_year = _saved_year
 	GameState.player_civ_id = _saved_player_id
+	GameState.next_unit_id = _saved_next_unit_id
 	PlayerActions.clear_queue()
 
 
@@ -51,6 +57,8 @@ func _make_region(id: int, name: String = "TestRegion", owner_id: int = -1) -> R
 func _setup_two_civs() -> Array:
 	GameState.regions.clear()
 	GameState.civilizations.clear()
+	GameState.units.clear()
+	GameState.next_unit_id = 0
 	GameState.player_civ_id = 0
 
 	var player := _make_civ(0, "PlayerCiv")
@@ -66,6 +74,10 @@ func _setup_two_civs() -> Array:
 	r1.adjacency_list = [0]
 	GameState.regions[0] = r0
 	GameState.regions[1] = r1
+
+	# Add a worker at capital so infrastructure/construction tests work
+	var worker := UnitData.new(-1, "Worker", Enums.UnitType.WORKER, 0, 0)
+	GameState.add_unit(worker)
 
 	return [player, enemy]
 
@@ -212,8 +224,8 @@ func test_invest_infrastructure_upgrades() -> void:
 	assert_eq(region.infrastructure_level, 1)
 	assert_eq(events.size(), 1)
 	assert_eq(events[0]["type"], "infrastructure_upgrade")
-	# Cost = 15 * (0 + 1) = 15
-	assert_eq(civs[0].production_stockpile, 85)
+	# Cost = 10 * (0 + 1) = 10
+	assert_eq(civs[0].production_stockpile, 90)
 
 
 func test_invest_infrastructure_insufficient_production() -> void:

@@ -13,6 +13,9 @@ static var events: Array[Dictionary] = []
 # {civ_id: Array[{year: int, value: float}]}
 static var stability_history: Dictionary = {}
 
+# Legitimacy snapshots per civ per year for trend sparklines.
+# {civ_id: Array[{year: int, value: float}]}
+static var legitimacy_history: Dictionary = {}
 # Severity levels
 const SEVERITY_MINOR := 1   # infra, dev tier, shortage
 const SEVERITY_NOTABLE := 2  # tech, expansion, hero, alliance
@@ -31,6 +34,10 @@ const TYPE_SEVERITY: Dictionary = {
 	"hero_spawned": SEVERITY_NOTABLE,
 	"hero_died": SEVERITY_MINOR,
 	"alliance_formed": SEVERITY_NOTABLE,
+	"succession": SEVERITY_MAJOR,
+	"election": SEVERITY_NOTABLE,
+	"coup": SEVERITY_MAJOR,
+	"legitimacy_shift": SEVERITY_MINOR,
 	"governance_change": SEVERITY_NOTABLE,
 	"dev_tier_change": SEVERITY_MINOR,
 	"infra_upgrade": SEVERITY_MINOR,
@@ -40,7 +47,13 @@ const TYPE_SEVERITY: Dictionary = {
 	"town_founded": SEVERITY_MINOR,
 	"building_constructed": SEVERITY_MINOR,
 	"alliance_broken": SEVERITY_NOTABLE,
+	"nap_formed": SEVERITY_NOTABLE,
+	"nap_broken": SEVERITY_NOTABLE,
+	"trade_formed": SEVERITY_MINOR,
+	"trade_broken": SEVERITY_MINOR,
+	"tribute_demanded": SEVERITY_NOTABLE,
 	"workforce_changed": SEVERITY_MINOR,
+	"trait_changed": SEVERITY_NOTABLE,
 }
 
 
@@ -61,6 +74,12 @@ static func record_stability(civ_id: int, year: int, value: float) -> void:
 		stability_history[civ_id] = []
 	stability_history[civ_id].append({"year": year, "value": value})
 
+
+static func record_legitimacy(civ_id: int, year: int, value: float) -> void:
+	## Record a legitimacy snapshot for sparkline rendering.
+	if not legitimacy_history.has(civ_id):
+		legitimacy_history[civ_id] = []
+	legitimacy_history[civ_id].append({"year": year, "value": value})
 
 static func get_events_for_year(year: int) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
@@ -90,10 +109,23 @@ static func get_stability_trend(civ_id: int, last_n: int = 20) -> Array[Dictiona
 	## Returns the last N stability snapshots for a civ.
 	var snapshots: Array = stability_history.get(civ_id, [])
 	var result: Array[Dictionary] = []
-	if snapshots.size() <= last_n:
-		result.assign(snapshots)
-	else:
-		result.assign(snapshots.slice(snapshots.size() - last_n))
+	var start := maxi(snapshots.size() - last_n, 0)
+	for i in range(start, snapshots.size()):
+		var entry = snapshots[i]
+		if entry is Dictionary:
+			result.append(entry)
+	return result
+
+
+static func get_legitimacy_trend(civ_id: int, last_n: int = 20) -> Array[Dictionary]:
+	## Returns the last N legitimacy snapshots for a civ.
+	var snapshots: Array = legitimacy_history.get(civ_id, [])
+	var result: Array[Dictionary] = []
+	var start := maxi(snapshots.size() - last_n, 0)
+	for i in range(start, snapshots.size()):
+		var entry = snapshots[i]
+		if entry is Dictionary:
+			result.append(entry)
 	return result
 
 
@@ -106,7 +138,8 @@ static func get_top_events(year: int, n: int = 3) -> Array[Dictionary]:
 	if year_events.size() <= n:
 		return year_events
 	var result: Array[Dictionary] = []
-	result.assign(year_events.slice(0, n))
+	for i in range(mini(n, year_events.size())):
+		result.append(year_events[i])
 	return result
 
 
@@ -114,3 +147,4 @@ static func clear() -> void:
 	## Reset all history. Called on new game.
 	events.clear()
 	stability_history.clear()
+	legitimacy_history.clear()

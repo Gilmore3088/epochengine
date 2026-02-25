@@ -9,7 +9,7 @@ func _make_civ(
 	military_strength: float = 50.0,
 	total_population: int = 5000,
 ) -> CivilizationData:
-	var civ := CivilizationData.new(0, "TestCiv", Color.RED)
+	var civ := CivilizationData.new(99, "TestCiv", Color.RED)
 	civ.food_stockpile = food_stockpile
 	civ.production_stockpile = production_stockpile
 	civ.military_strength = military_strength
@@ -220,10 +220,10 @@ func test_upgrade_infrastructure_success() -> void:
 	var civ := _make_civ(0, 200, 0.0, 0)
 	var region := _make_region()
 	region.infrastructure_level = 0
-	# Cost: 15 * (0+1) = 15
+	# Cost: 10 * (0+1) = 10
 	assert_true(EconomySimulation.try_upgrade_infrastructure(civ, region))
 	assert_eq(region.infrastructure_level, 1)
-	assert_eq(civ.production_stockpile, 185)
+	assert_eq(civ.production_stockpile, 190)
 
 
 func test_upgrade_infrastructure_max_level() -> void:
@@ -235,10 +235,52 @@ func test_upgrade_infrastructure_max_level() -> void:
 
 func test_upgrade_infrastructure_too_expensive() -> void:
 	var civ := _make_civ(0, 10, 0.0, 0)
+	civ.technologies = ["Steam Power", "Electricity"]
 	var region := _make_region()
 	region.infrastructure_level = 3
-	# Cost: 15 * (3+1) = 60, only has 10
+	# Cost: 10 * 4 = 40, only has 10
 	assert_false(EconomySimulation.try_upgrade_infrastructure(civ, region))
+
+
+func test_upgrade_blocked_by_tech_gate() -> void:
+	var civ := _make_civ(0, 200, 0.0, 0)
+	var region := _make_region()
+	region.infrastructure_level = 2
+	# Level 3 requires Steam Power — civ has no techs
+	assert_false(EconomySimulation.try_upgrade_infrastructure(civ, region),
+		"Should block upgrade to Railways without Steam Power")
+	assert_eq(region.infrastructure_level, 2)
+
+
+func test_upgrade_allowed_with_tech() -> void:
+	var civ := _make_civ(0, 200, 0.0, 0)
+	civ.technologies = ["Steam Power"]
+	var region := _make_region()
+	region.infrastructure_level = 2
+	# Level 3 requires Steam Power — civ has it
+	assert_true(EconomySimulation.try_upgrade_infrastructure(civ, region),
+		"Should allow upgrade to Railways with Steam Power")
+	assert_eq(region.infrastructure_level, 3)
+
+
+func test_upgrade_no_tech_needed_for_low_levels() -> void:
+	var civ := _make_civ(0, 200, 0.0, 0)
+	var region := _make_region()
+	region.infrastructure_level = 0
+	# Level 0→1 has no tech gate
+	assert_true(EconomySimulation.try_upgrade_infrastructure(civ, region))
+	assert_eq(region.infrastructure_level, 1)
+	# Level 1→2 requires Bronze Working — should fail
+	assert_false(EconomySimulation.try_upgrade_infrastructure(civ, region),
+		"Level 2 requires Bronze Working")
+
+
+func test_infrastructure_names_all_defined() -> void:
+	for level in range(Constants.INFRASTRUCTURE_MAX_LEVEL + 1):
+		assert_true(Constants.INFRASTRUCTURE_NAMES.has(level),
+			"INFRASTRUCTURE_NAMES missing level %d" % level)
+		assert_true(Constants.INFRASTRUCTURE_TECH_GATES.has(level),
+			"INFRASTRUCTURE_TECH_GATES missing level %d" % level)
 
 
 # --- Spending Priority ---

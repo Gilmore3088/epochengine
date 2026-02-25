@@ -96,9 +96,9 @@ func test_town_stability_bonus() -> void:
 func test_town_maintenance_cost() -> void:
 	var town := TownData.new(0, "Town", 0)
 	assert_eq(town.get_maintenance_cost(), 0)
-	town.add_building(Enums.BuildingType.GRANARY)
-	town.add_building(Enums.BuildingType.MARKET)
-	assert_eq(town.get_maintenance_cost(), 2 * Constants.BUILDING_MAINTENANCE_PER)
+	town.add_building(Enums.BuildingType.BARRACKS)   # upkeep 1
+	town.add_building(Enums.BuildingType.WORKSHOP)   # upkeep 1
+	assert_eq(town.get_maintenance_cost(), 2, "Barracks(1) + Workshop(1) = 2 upkeep")
 
 
 func test_town_serialization() -> void:
@@ -292,8 +292,8 @@ func test_aggregate_defense_bonus() -> void:
 func test_aggregate_maintenance() -> void:
 	var region := _make_region()
 	var town := TownData.new(0, "T1", 0)
-	town.add_building(Enums.BuildingType.GRANARY)
-	town.add_building(Enums.BuildingType.MARKET)
+	town.add_building(Enums.BuildingType.BARRACKS)   # upkeep 1
+	town.add_building(Enums.BuildingType.WORKSHOP)   # upkeep 1
 	region.towns = [town]
 	assert_eq(TownSimulation.aggregate_region_maintenance(region), 2)
 
@@ -318,8 +318,8 @@ func test_economy_with_towns_uses_aggregation() -> void:
 	region.towns = [town]
 	var regions: Array[RegionData] = [region]
 	var food := EconomySimulation.calculate_food_production(civ, regions)
-	# Town food: base 5/1 + granary 2 = 7, plus infra 0 = 7
-	assert_eq(food, 7, "Town-based region should use aggregated town output")
+	# Town food: base 5/1 + granary 3 = 8, plus infra 0 = 8
+	assert_eq(food, 8, "Town-based region should use aggregated town output")
 
 
 # --- Building Construction ---
@@ -437,12 +437,12 @@ func test_compute_town_outputs_with_buildings() -> void:
 	town.add_building(Enums.BuildingType.WORKSHOP)
 	region.towns = [town]
 	var outputs := TownSimulation.compute_town_outputs(town, region)
-	assert_eq(outputs["bldg_food"], 2)  # GRANARY
-	assert_eq(outputs["bldg_prod"], 3)  # WORKSHOP
-	assert_eq(outputs["total_food"], 3 + 2)
-	assert_eq(outputs["total_prod"], 3 + 3)
-	assert_eq(outputs["upkeep"], 3)  # Granary(1) + Workshop(2)
-	assert_eq(outputs["net_prod"], (3 + 3) - 3)
+	assert_eq(outputs["bldg_food"], 3)  # GRANARY gives 3 food
+	assert_eq(outputs["bldg_prod"], 4)  # WORKSHOP gives 4 prod
+	assert_eq(outputs["total_food"], 3 + 3)
+	assert_eq(outputs["total_prod"], 3 + 4)
+	assert_eq(outputs["upkeep"], 1)  # Granary(0) + Workshop(1)
+	assert_eq(outputs["net_prod"], (3 + 4) - 1)
 
 
 func test_compute_town_outputs_multi_town_splits_base() -> void:
@@ -472,9 +472,9 @@ func test_supply_efficiency_reduces_food() -> void:
 	var town := TownData.new(0, "T1", 0)
 	town.add_building(Enums.BuildingType.GRANARY)
 	region.towns = [town]
-	# Raw food: base 3 + granary 2 = 5. At 50% supply = 2
+	# Raw food: base 3 + granary 3 = 6. At 50% supply = 3
 	var total := TownSimulation.aggregate_region_food(region)
-	assert_eq(total, int(5.0 * 0.5))
+	assert_eq(total, int(6.0 * 0.5))
 
 
 func test_supply_efficiency_reduces_production() -> void:
@@ -483,9 +483,9 @@ func test_supply_efficiency_reduces_production() -> void:
 	var town := TownData.new(0, "T1", 0)
 	town.add_building(Enums.BuildingType.WORKSHOP)
 	region.towns = [town]
-	# Raw prod: base 3 + workshop 3 = 6. At 50% = 3
+	# Raw prod: base 3 + workshop 4 = 7. At 50% = 3
 	var total := TownSimulation.aggregate_region_production(region)
-	assert_eq(total, int(6.0 * 0.5))
+	assert_eq(total, int(7.0 * 0.5))
 
 
 func test_supply_efficiency_full_unchanged() -> void:
@@ -514,8 +514,8 @@ func test_supply_does_not_affect_maintenance() -> void:
 	town.add_building(Enums.BuildingType.GRANARY)
 	town.add_building(Enums.BuildingType.WORKSHOP)
 	region.towns = [town]
-	# Maintenance is flat regardless of supply: Granary(1) + Workshop(2) = 3
-	assert_eq(TownSimulation.aggregate_region_maintenance(region), 3)
+	# Maintenance is flat regardless of supply: Granary(0) + Workshop(1) = 1
+	assert_eq(TownSimulation.aggregate_region_maintenance(region), 1)
 
 
 func test_compute_outputs_shows_supply() -> void:
@@ -526,8 +526,8 @@ func test_compute_outputs_shows_supply() -> void:
 	region.towns = [town]
 	var outputs := TownSimulation.compute_town_outputs(town, region)
 	assert_almost_eq(outputs["supply_efficiency"], 0.5, 0.001)
-	# Raw food = 3 + 2 = 5, at 50% = 2
-	assert_eq(outputs["total_food"], int(5.0 * 0.5))
+	# Raw food = 3 + 3 (granary) = 6, at 50% = 3
+	assert_eq(outputs["total_food"], int(6.0 * 0.5))
 	# Stability not scaled
 	assert_almost_eq(outputs["total_stab"], 0.0, 0.001)
 
@@ -536,15 +536,15 @@ func test_compute_outputs_shows_supply() -> void:
 
 func test_maintenance_cost_differentiated() -> void:
 	var town := TownData.new(0, "Town", 0)
-	town.add_building(Enums.BuildingType.GRANARY)    # upkeep 1
-	town.add_building(Enums.BuildingType.WORKSHOP)   # upkeep 2
-	assert_eq(town.get_maintenance_cost(), 3)
+	town.add_building(Enums.BuildingType.BARRACKS)   # upkeep 1
+	town.add_building(Enums.BuildingType.WORKSHOP)   # upkeep 1
+	assert_eq(town.get_maintenance_cost(), 2)
 
 
 func test_deficit_detection_no_deficit() -> void:
 	var region := _make_region(Enums.TerrainType.PLAINS)
 	var town := TownData.new(0, "T1", 0)
-	town.add_building(Enums.BuildingType.GRANARY)  # upkeep 1, plains prod_yield 3
+	town.add_building(Enums.BuildingType.GRANARY)  # upkeep 0, plains prod_yield 3
 	region.towns = [town]
 	var info := TownSimulation.compute_region_deficit_info(region)
 	assert_false(info["has_deficit"])
@@ -552,10 +552,10 @@ func test_deficit_detection_no_deficit() -> void:
 
 
 func test_deficit_detection_with_deficit() -> void:
-	# Tundra: production_yield=1. Supply=0.5. 3 workshops (upkeep 2 each = 6).
-	# Raw prod per town: 1/1 + 3*3 = 10, at 50% supply = 5. Upkeep = 6. net = -1
+	# Tundra: production_yield=1. Supply=0.1. 3 workshops (upkeep 1 each = 3).
+	# Raw prod per town: 1/1 + 3*4 = 13, at 10% supply = 1. Upkeep = 3. net = -2
 	var region := _make_region(Enums.TerrainType.TUNDRA)
-	region.supply_value = 0.5
+	region.supply_value = 0.1
 	var town := TownData.new(0, "T1", 0)
 	town.add_building(Enums.BuildingType.WORKSHOP)
 	town.add_building(Enums.BuildingType.WORKSHOP)
@@ -572,8 +572,8 @@ func test_town_hall_in_building_rules() -> void:
 	assert_true(Constants.BUILDING_RULES.has(7), "BUILDING_RULES missing Town Hall (key 7)")
 	var rule: Dictionary = Constants.BUILDING_RULES[7]
 	assert_eq(rule["category"], "administration")
-	assert_eq(rule["build_cost"], 15)
-	assert_eq(rule["upkeep_cost"], 2)
+	assert_eq(rule["build_cost"], 10)
+	assert_eq(rule["upkeep_cost"], 1)
 	assert_true(rule["outputs"].has("stability"))
 	assert_true(rule["outputs"].has("tech"))
 
@@ -620,8 +620,8 @@ func test_workforce_growth_boosts_food() -> void:
 	town.workforce_preset = 1  # Growth: food 1.4
 	region.towns = [town]
 	var outputs := TownSimulation.compute_town_outputs(town, region)
-	# Raw food: base 3 + granary 2 = 5. * 1.0 supply * 1.4 growth = 7
-	assert_eq(outputs["total_food"], int(5.0 * 1.0 * 1.4))
+	# Raw food: base 3 + granary 3 = 6. * 1.0 supply * 1.4 growth = 8
+	assert_eq(outputs["total_food"], int(6.0 * 1.0 * 1.4))
 	# Production: base 3 + town_hall 1 = 4. * 1.0 * 0.7 = 2
 	assert_eq(outputs["total_prod"], int(4.0 * 1.0 * 0.7))
 
@@ -646,8 +646,8 @@ func test_aggregate_food_includes_workforce() -> void:
 	town.workforce_preset = 1  # Growth: food 1.4
 	region.towns = [town]
 	var total := TownSimulation.aggregate_region_food(region)
-	# Raw food 5 * 1.0 supply * 1.4 = 7
-	assert_eq(total, int(5.0 * 1.4))
+	# Raw food 6 (base 3 + granary 3) * 1.0 supply * 1.4 = 8
+	assert_eq(total, int(6.0 * 1.4))
 
 
 func test_aggregate_prod_includes_workforce() -> void:
@@ -926,13 +926,24 @@ func test_ai_picks_library() -> void:
 
 
 func test_ai_declining_can_invest() -> void:
-	var civ := _make_civ(80)
-	civ.stability = 20.0  # declining
-	GameState.civilizations[civ.id] = civ
+	# Use isolated civ/region IDs to avoid interference with loaded game data
+	var saved_regions := GameState.regions.duplicate()
+	var saved_civs := GameState.civilizations.duplicate()
 
-	var region := _make_region(Enums.TerrainType.PLAINS, 2000, civ.id)
+	var civ := CivilizationData.new(99, "DecliningCiv", Color.RED)
+	civ.production_stockpile = 80
+	civ.food_stockpile = 100
+	civ.total_population = 5000
+	civ.economy_bias = 0.5
+	civ.aggression_bias = 0.5
+	civ.stability = 20.0  # declining
+	GameState.civilizations[99] = civ
+
+	var region := RegionData.new(999, "IsolatedRegion", Enums.TerrainType.PLAINS)
+	region.population = 2000
+	region.owner_id = 99
 	region.infrastructure_level = 0
-	GameState.regions[region.id] = region
+	GameState.regions[999] = region
 
 	var invested := false
 	for i in range(200):
@@ -943,6 +954,11 @@ func test_ai_declining_can_invest() -> void:
 		if not events.is_empty() and events[0]["type"] == "infrastructure_upgrade":
 			invested = true
 			break
+
+	# Restore
+	GameState.regions = saved_regions
+	GameState.civilizations = saved_civs
+
 	assert_true(invested, "DECLINING civ with stockpile should eventually invest in infra")
 
 

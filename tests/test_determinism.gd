@@ -18,8 +18,11 @@ func _setup_game_state() -> void:
 	GameState.next_town_id = 0
 	GameState.turn_log.clear()
 	GameState.player_civ_id = 0
+	GameState.units.clear()
+	GameState.next_unit_id = 0
 	PlayerActions.clear_queue()
 	GameState.load_game_data()
+	GameState.start_new_game()
 	# Ensure all regions start with empty towns (prevent shared-array leaking)
 	for region in GameState.regions.values():
 		region.towns = []
@@ -235,6 +238,12 @@ func _deep_snapshot() -> Dictionary:
 			"alliances": civ.alliance_partners.duplicate(),
 			"golden_cooldown": civ.golden_age_cooldown,
 			"gov_years": civ.governance_years,
+			"expansion_bias": civ.expansion_bias,
+			"aggression_bias": civ.aggression_bias,
+			"diplomacy_bias": civ.diplomacy_bias,
+			"economy_bias": civ.economy_bias,
+			"initial_expansion_bias": civ.initial_expansion_bias,
+			"years_at_peace": civ.years_at_peace,
 			"resource_stockpiles": civ.resource_stockpiles.duplicate(),
 			"resource_prod_log": civ.resource_production_log.duplicate(),
 		}

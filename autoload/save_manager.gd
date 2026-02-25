@@ -72,7 +72,21 @@ func _create_save_data() -> Resource:
 	save.set_meta("current_year", GameState.current_year)
 	save.set_meta("next_hero_id", GameState.next_hero_id)
 	save.set_meta("next_town_id", GameState.next_town_id)
+	save.set_meta("next_unit_id", GameState.next_unit_id)
 	save.set_meta("player_civ_id", GameState.player_civ_id)
+	save.set_meta("map_size", GameState.map_config.map_size)
+	save.set_meta("map_seed", GameState.map_config.seed)
+
+	# Serialize hex coordinates
+	var coord_list: Array[Dictionary] = []
+	for region_id in GameState.region_hex_coords:
+		var coord: Vector2i = GameState.region_hex_coords[region_id]
+		coord_list.append({
+			"id": region_id,
+			"q": coord.x,
+			"r": coord.y,
+		})
+	save.set_meta("region_hex_coords", coord_list)
 
 	# Serialize regions
 	var region_list: Array[Dictionary] = []
@@ -98,6 +112,23 @@ func _create_save_data() -> Resource:
 			"resource_deposits": region.resource_deposits,
 			"extraction_years": region.extraction_years,
 			"renewable_degradation": region.renewable_degradation,
+			"has_river": region.has_river,
+			"river_connections": region.river_connections,
+			"has_lake": region.has_lake,
+			"elevation": region.elevation,
+			"moisture": region.moisture,
+			"flow_accum": region.flow_accum,
+			"basin_id": region.basin_id,
+			"active_disaster": region.active_disaster,
+			"disaster_years_remaining": region.disaster_years_remaining,
+			"disaster_yield_penalty": region.disaster_yield_penalty,
+			"governor_focus": region.governor_focus,
+			"political_influence": region.political_influence,
+			"lobby_request": region.lobby_request,
+			"lobby_ignore_years": region.lobby_ignore_years,
+			"terraform_target": region.terraform_target,
+			"terraform_years_remaining": region.terraform_years_remaining,
+			"reclamation_bonus": region.reclamation_bonus,
 		})
 	save.set_meta("regions", region_list)
 
@@ -120,6 +151,18 @@ func _create_save_data() -> Resource:
 			"governance_tier": civ.governance_tier,
 			"governance_years": civ.governance_years,
 			"current_era": civ.current_era,
+			"legitimacy": civ.legitimacy,
+			"government_form": civ.government_form,
+			"succession_law": civ.succession_law,
+			"dynasty_name": civ.dynasty_name,
+			"ruler_name": civ.ruler_name,
+			"ruler_age": civ.ruler_age,
+			"ruler_lifespan": civ.ruler_lifespan,
+			"heir_name": civ.heir_name,
+			"heir_age": civ.heir_age,
+			"years_since_election": civ.years_since_election,
+			"election_interval": civ.election_interval,
+			"power_blocs": civ.power_blocs,
 			"golden_age_years_remaining": civ.golden_age_years_remaining,
 			"golden_age_cooldown": civ.golden_age_cooldown,
 			"knowledge": civ.knowledge,
@@ -144,6 +187,15 @@ func _create_save_data() -> Resource:
 			"spending_priority": civ.spending_priority,
 			"spending_priority_cooldown": civ.spending_priority_cooldown,
 			"explored_regions": civ.explored_regions,
+			"initial_expansion_bias": civ.initial_expansion_bias,
+			"initial_aggression_bias": civ.initial_aggression_bias,
+			"initial_diplomacy_bias": civ.initial_diplomacy_bias,
+			"initial_economy_bias": civ.initial_economy_bias,
+			"years_at_peace": civ.years_at_peace,
+			"nap_partners": civ.nap_partners,
+			"trade_partners": civ.trade_partners,
+			"tribute_cooldowns": civ.tribute_cooldowns,
+			"cartography_skill": civ.cartography_skill,
 		})
 	save.set_meta("civilizations", civ_list)
 
@@ -161,6 +213,15 @@ func _create_save_data() -> Resource:
 		})
 	save.set_meta("heroes", hero_list)
 
+	# Serialize units
+	var unit_list: Array[Dictionary] = []
+	for unit in GameState.units.values():
+		unit_list.append(unit.to_dict())
+	save.set_meta("units", unit_list)
+
+	# Tutorial state
+	save.set_meta("tutorial", TutorialManager.get_save_data())
+
 	return save
 
 
@@ -169,7 +230,12 @@ func _restore_save_data(save: Resource) -> void:
 	GameState.current_year = save.get_meta("current_year")
 	GameState.next_hero_id = save.get_meta("next_hero_id")
 	GameState.next_town_id = save.get_meta("next_town_id", 0)
+	GameState.next_unit_id = save.get_meta("next_unit_id", 0)
 	GameState.player_civ_id = save.get_meta("player_civ_id", 0)
+	if save.has_meta("map_size"):
+		GameState.map_config.map_size = save.get_meta("map_size", Enums.MapSize.MEDIUM)
+	if save.has_meta("map_seed"):
+		GameState.map_config.seed = save.get_meta("map_seed", 0)
 
 	# Restore regions
 	GameState.regions.clear()
@@ -195,7 +261,33 @@ func _restore_save_data(save: Resource) -> void:
 		region.resource_deposits = data.get("resource_deposits", {})
 		region.extraction_years = data.get("extraction_years", 0)
 		region.renewable_degradation = data.get("renewable_degradation", 0.0)
+		region.has_river = data.get("has_river", false)
+		region.river_connections = data.get("river_connections", [])
+		region.has_lake = data.get("has_lake", false)
+		region.elevation = data.get("elevation", 0)
+		region.moisture = data.get("moisture", 0.0)
+		region.flow_accum = data.get("flow_accum", 0.0)
+		region.basin_id = data.get("basin_id", -1)
+		region.active_disaster = data.get("active_disaster", -1)
+		region.disaster_years_remaining = data.get("disaster_years_remaining", 0)
+		region.disaster_yield_penalty = data.get("disaster_yield_penalty", 0.0)
+		region.governor_focus = data.get("governor_focus", 0)
+		region.political_influence = data.get("political_influence", 0.0)
+		region.lobby_request = data.get("lobby_request", -1)
+		region.lobby_ignore_years = data.get("lobby_ignore_years", 0)
+		region.terraform_target = data.get("terraform_target", -1)
+		region.terraform_years_remaining = data.get("terraform_years_remaining", 0)
+		region.reclamation_bonus = data.get("reclamation_bonus", 0.0)
 		GameState.regions[region.id] = region
+
+	# Restore hex coordinates
+	GameState.region_hex_coords.clear()
+	GameState.land_hex_coords.clear()
+	for entry in save.get_meta("region_hex_coords", []):
+		var rid: int = int(entry["id"])
+		var coord := Vector2i(entry["q"], entry["r"])
+		GameState.region_hex_coords[rid] = coord
+		GameState.land_hex_coords.append(coord)
 
 	# Restore civilizations
 	GameState.civilizations.clear()
@@ -210,12 +302,24 @@ func _restore_save_data(save: Resource) -> void:
 		civ.production_stockpile = data["production_stockpile"]
 		civ.military_strength = data["military_strength"]
 		civ.capital_region_id = data["capital_region_id"]
-		civ.hero_ids = data["hero_ids"]
+		civ.hero_ids.assign(data.get("hero_ids", []))
 		civ.is_collapsed = data["is_collapsed"]
 		civ.is_player = data.get("is_player", false)
 		civ.governance_tier = data.get("governance_tier", Enums.GovernanceTier.TRIBAL)
 		civ.governance_years = data.get("governance_years", 0)
 		civ.current_era = data.get("current_era", Enums.Epoch.PREHISTORIC)
+		civ.legitimacy = data.get("legitimacy", Constants.LEGITIMACY_START)
+		civ.government_form = data.get("government_form", Enums.GovernmentForm.TRIBAL)
+		civ.succession_law = data.get("succession_law", Enums.SuccessionLaw.PRIMOGENITURE)
+		civ.dynasty_name = data.get("dynasty_name", "")
+		civ.ruler_name = data.get("ruler_name", "")
+		civ.ruler_age = data.get("ruler_age", 30)
+		civ.ruler_lifespan = data.get("ruler_lifespan", 70)
+		civ.heir_name = data.get("heir_name", "")
+		civ.heir_age = data.get("heir_age", 12)
+		civ.years_since_election = data.get("years_since_election", 0)
+		civ.election_interval = data.get("election_interval", Constants.DEFAULT_ELECTION_INTERVAL)
+		civ.power_blocs = data.get("power_blocs", {})
 		civ.golden_age_years_remaining = data["golden_age_years_remaining"]
 		civ.golden_age_cooldown = data["golden_age_cooldown"]
 		civ.knowledge = data["knowledge"]
@@ -227,18 +331,29 @@ func _restore_save_data(save: Resource) -> void:
 		civ.aggression_bias = data["aggression_bias"]
 		civ.diplomacy_bias = data["diplomacy_bias"]
 		civ.economy_bias = data["economy_bias"]
-		civ.war_targets = data["war_targets"]
+		civ.war_targets.assign(data.get("war_targets", []))
 		civ.war_durations = data.get("war_durations", {})
 		civ.peace_cooldowns = data.get("peace_cooldowns", {})
-		civ.alliance_partners = data["alliance_partners"]
+		civ.alliance_partners.assign(data.get("alliance_partners", []))
 		civ.consecutive_low_stability_years = data["consecutive_low_stability_years"]
-		civ.technologies = data["technologies"]
+		civ.technologies.assign(data.get("technologies", []))
 		civ.resource_stockpiles = data.get("resource_stockpiles", {})
 		civ.resource_production_log = data.get("resource_production_log", {})
 		civ.research_focus = data.get("research_focus", 0)
 		civ.research_focus_cooldown = data.get("research_focus_cooldown", 0)
 		civ.spending_priority = data.get("spending_priority", 0)
 		civ.spending_priority_cooldown = data.get("spending_priority_cooldown", 0)
+		# Trait evolution tracking
+		civ.initial_expansion_bias = data.get("initial_expansion_bias", -1.0)
+		civ.initial_aggression_bias = data.get("initial_aggression_bias", -1.0)
+		civ.initial_diplomacy_bias = data.get("initial_diplomacy_bias", -1.0)
+		civ.initial_economy_bias = data.get("initial_economy_bias", -1.0)
+		civ.years_at_peace = data.get("years_at_peace", 0)
+		civ.nap_partners = data.get("nap_partners", {})
+		civ.trade_partners.assign(data.get("trade_partners", []))
+		civ.tribute_cooldowns = data.get("tribute_cooldowns", {})
+		civ.cartography_skill = data.get("cartography_skill", 0.0)
+		PoliticalEvents.ensure_civ_state(civ)
 		# Fog of war: restore explored regions and rebuild O(1) lookup cache
 		var saved_explored: Array = data.get("explored_regions", [])
 		civ.explored_regions.clear()
@@ -254,6 +369,9 @@ func _restore_save_data(save: Resource) -> void:
 				civ.explored_set[rid] = true
 		GameState.civilizations[civ.id] = civ
 
+	# Restore tutorial state
+	TutorialManager.load_save_data(save.get_meta("tutorial") if save.has_meta("tutorial") else {})
+
 	# Restore heroes
 	GameState.heroes.clear()
 	for data in save.get_meta("heroes"):
@@ -266,6 +384,12 @@ func _restore_save_data(save: Resource) -> void:
 		hero.owner_civ_id = data["owner_civ_id"]
 		hero.birth_year = data["birth_year"]
 		GameState.heroes[hero.id] = hero
+
+	# Restore units
+	GameState.units.clear()
+	for data in save.get_meta("units", []):
+		var unit := UnitData.from_dict(data)
+		GameState.units[unit.id] = unit
 
 
 func _serialize_towns(towns: Array) -> Array:

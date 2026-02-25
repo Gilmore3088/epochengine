@@ -126,6 +126,29 @@ static func style_label_stat(lbl: Label, size: int = 15, color: Color = PARCHMEN
 	lbl.add_theme_color_override("font_color", color)
 
 
+static func style_button_animated(btn: Button) -> void:
+	## Style button with hover scale animation and click sound.
+	style_button(btn)
+	btn.pivot_offset = btn.size / 2.0
+	btn.mouse_entered.connect(func() -> void:
+		btn.pivot_offset = btn.size / 2.0
+		var tw := btn.create_tween()
+		tw.tween_property(btn, "scale", Vector2(1.05, 1.05), 0.1).set_ease(Tween.EASE_OUT)
+		var am: AudioManager = btn.get_node_or_null("/root/AudioManager") as AudioManager
+		if am:
+			am.play_ui_hover()
+	)
+	btn.mouse_exited.connect(func() -> void:
+		var tw := btn.create_tween()
+		tw.tween_property(btn, "scale", Vector2.ONE, 0.1).set_ease(Tween.EASE_OUT)
+	)
+	btn.pressed.connect(func() -> void:
+		var am: AudioManager = btn.get_node_or_null("/root/AudioManager") as AudioManager
+		if am:
+			am.play_ui_click()
+	)
+
+
 static func make_tooltip_style() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.06, 0.05, 0.08, 0.95)

@@ -92,6 +92,10 @@ static func _compute_edge_cost(
 	var infra_reduction := target_region.infrastructure_level * Constants.SUPPLY_INFRASTRUCTURE_BONUS_PER_LEVEL
 	base_cost *= maxf(0.3, 1.0 - infra_reduction)  # cap at 70% reduction
 
+	# River supply bonus: rivers improve throughput
+	if target_region.has_river:
+		base_cost *= maxf(0.3, 1.0 - Constants.RIVER_SUPPLY_THROUGHPUT_BONUS)
+
 	# Enemy interdiction: adjacent enemy-at-war regions disrupt supply
 	if not civ.war_targets.is_empty():
 		var interdicted := _is_interdicted(target_region, civ)
